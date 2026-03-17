@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mijn Trimble Extension</title>
+</head>
+<body>
+  <h2>Trimble tool</h2>
+  <button onclick="getProject()">Project naam ophalen</button>
+
+  <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+
+  <script>
+    let API;
+
+    async function init() {
+      API = await WorkspaceAPI.connect(window.parent);
+      console.log("Verbonden met Trimble");
+    }
+
+    async function getProject() {
+      const project = await API.project.getProject();
+      alert("Project: " + project.name);
+    }
+
+    init();
+  </script>
+</body>
+</html>
