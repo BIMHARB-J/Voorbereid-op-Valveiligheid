@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trimble Connect IFC Viewer - Floor Edges Highlighter</title>
+    <title>Trimble Connect IFC Viewer - Debug</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -15,13 +15,6 @@
             border: 1px solid #ddd;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .controls {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
         }
         button {
             background-color: #0066cc;
@@ -30,317 +23,119 @@
             border: none;
             border-radius: 3px;
             cursor: pointer;
-            font-size: 16px;
         }
-        button:hover {
-            background-color: #0052a3;
-        }
-        button.secondary {
-            background-color: #666;
-        }
-        button.secondary:hover {
-            background-color: #444;
-        }
-        button.danger {
-            background-color: #d32f2f;
-        }
-        button.danger:hover {
-            background-color: #b71c1c;
-        }
-        .result {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-radius: 3px;
-            display: none;
-        }
-        .result.show {
-            display: block;
-        }
-        .error {
-            color: #d32f2f;
-            border-left: 4px solid #d32f2f;
-            padding: 10px;
-        }
-        .success {
-            color: #388e3c;
-            border-left: 4px solid #388e3c;
-            padding: 10px;
-        }
-        .loading {
-            color: #1976d2;
-            border-left: 4px solid #1976d2;
-            padding: 10px;
-        }
-        .info {
-            color: #1976d2;
-            border-left: 4px solid #1976d2;
-            padding: 10px;
-        }
-        #floorEdgesList {
-            margin-top: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .floor-item {
-            padding: 5px;
-            background-color: white;
+        #debug {
+            background-color: #f5f5f5;
             border: 1px solid #ddd;
-            margin: 5px 0;
+            padding: 15px;
+            margin-top: 20px;
             border-radius: 3px;
-            cursor: pointer;
-        }
-        .floor-item:hover {
-            background-color: #e3f2fd;
-        }
-        .floor-item.highlighted {
-            background-color: #ffeb3b;
-            border-color: #fbc02d;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Trimble Connect IFC Viewer - Vloerranden Highlighter</h1>
+        <h1>Trimble Connect API Debug</h1>
+        <button onclick="debugAPI()"> Toon Beschikbare API Methodes</button>
+        <button onclick="getModelInfo()"> Toon Model Informatie</button>
         
-        <div class="controls">
-            <button onclick="highlightFloorEdges()">🎯 Vloerranden Highlighten</button>
-            <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="secondary" onclick="showFloorList()">📋 Toon Alle Vloeren</button>
-            <button class="danger" onclick="isolateFloorEdges()">🔍 Alleen Vloerranden Tonen</button>
-        </div>
-        
-        <div id="result" class="result">
-            <p id="message"></p>
-        </div>
-        
-        <div id="floorEdgesList"></div>
+        <div id="debug"></div>
     </div>
 
-    <!-- Trimble Connect Workspace API Script -->
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     
     <script>
         let API = null;
-        let highlightedFloors = [];
-        let allSlabs = [];
         
-        // Initialiseer API bij pagina laden
         async function initAPI() {
             try {
                 API = await TrimbleConnectWorkspace.connect(
                     window.parent,
                     (event, data) => {
                         console.log('Event:', event, data);
+                        addDebug(`Event: ${event}`, data);
                     }
                 );
-                console.log('API initialized successfully');
-                showMessage('API verbonden. Klik op "Vloerranden Highlighten" om te starten.', 'info');
+                addDebug('✓ API verbonden');
             } catch (error) {
-                console.error('Failed to initialize API:', error);
-                showMessage('API initialisatie mislukt. Zorg dat dit een Trimble Connect extensie is.', 'error');
+                addDebug('✗ API fout:', error.message);
             }
         }
         
-        // Vloerranden highlighten
-        async function highlightFloorEdges() {
+        function debugAPI() {
             if (!API) {
-                showMessage('API is niet geïnitialiseerd', 'error');
+                addDebug('API is niet geïnitialiseerd');
                 return;
             }
             
-            try {
-                showMessage('Vloerranden zoeken en highlighten...', 'loading');
-                
-                // Query naar alle IfcSlab elementen
-                const query = {
-                    selector: 'IfcSlab'
-                };
-                
-                // Gebruik de query API om elementen te vinden
-                const results = await API.query.queryElements(query);
-                
-                if (!results || results.length === 0) {
-                    showMessage('Geen IfcSlab elementen gevonden in het model', 'error');
-                    return;
-                }
-                
-                console.log(`${results.length} IfcSlab elementen gevonden`);
-                
-                allSlabs = results;
-                highlightedFloors = [];
-                
-                // Highlight alle slabs
-                for (const slab of results) {
-                    try {
-                        // Selecteer en highlight het element
-                        await API.selection.selectElement(slab.id, true);
-                        
-                        highlightedFloors.push({
-                            id: slab.id,
-                            name: slab.name || `Vloer ${slab.id}`
-                        });
-                    } catch (e) {
-                        console.warn(`Kon vloer ${slab.id} niet highlighten:`, e);
-                    }
-                }
-                
-                showMessage(
-                    `✓ ${highlightedFloors.length} vloerranden zijn gemarkeerd!`,
-                    'success'
-                );
-                
-                // Toon de lijst met gemarkeerde vloeren
-                displayFloorList();
-                
-            } catch (error) {
-                showMessage(`Fout bij highlighten: ${error.message}`, 'error');
-                console.error('Error:', error);
-            }
-        }
-        
-        // Reset highlight
-        async function resetHighlight() {
-            if (!API) return;
+            addDebug('=== BESCHIKBARE API METHODES ===\n');
             
-            try {
-                showMessage('Highlight wordt gereset...', 'loading');
-                
-                // Clear selection
-                await API.selection.clearSelection();
-                
-                highlightedFloors = [];
-                document.getElementById('floorEdgesList').innerHTML = '';
-                
-                showMessage('Highlight is gereset', 'success');
-                
-            } catch (error) {
-                showMessage(`Fout bij reset: ${error.message}`, 'error');
-                console.error('Error:', error);
-            }
-        }
-        
-        // Alleen vloerranden tonen (isoleren)
-        async function isolateFloorEdges() {
-            if (!API) {
-                showMessage('API is niet geïnitialiseerd', 'error');
-                return;
-            }
+            // Check alle beschikbare properties
+            const apiKeys = Object.keys(API);
+            addDebug(`Hoofd-objecten: ${apiKeys.join(', ')}\n`);
             
-            try {
-                showMessage('Alleen vloerranden isoleren...', 'loading');
-                
-                // Query naar alle IfcSlab elementen
-                const query = {
-                    selector: 'IfcSlab'
-                };
-                
-                const results = await API.query.queryElements(query);
-                
-                if (!results || results.length === 0) {
-                    showMessage('Geen IfcSlab elementen gevonden', 'error');
-                    return;
+            // Check elk object dieper
+            apiKeys.forEach(key => {
+                const obj = API[key];
+                if (obj && typeof obj === 'object') {
+                    const methods = Object.keys(obj);
+                    addDebug(`\n${key}:`, methods.join(', '));
                 }
-                
-                // Isoleer deze elementen
-                const slabIds = results.map(s => s.id);
-                
-                // Selecteer allen en isoleer
-                for (const id of slabIds) {
-                    await API.selection.selectElement(id, true);
-                }
-                
-                // Isoleer view
-                await API.view.isolate(slabIds);
-                
-                showMessage(`✓ ${slabIds.length} vloeren zijn geïsoleerd. Andere elementen zijn verborgen.`, 'success');
-                
-            } catch (error) {
-                showMessage(`Fout bij isoleren: ${error.message}`, 'error');
-                console.error('Error:', error);
-            }
-        }
-        
-        // Toon alle vloeren in een lijst
-        async function showFloorList() {
-            if (!API) {
-                showMessage('API is niet geïnitialiseerd', 'error');
-                return;
-            }
-            
-            try {
-                showMessage('Vloeren ophalen...', 'loading');
-                
-                // Query naar alle IfcSlab elementen
-                const query = {
-                    selector: 'IfcSlab'
-                };
-                
-                const results = await API.query.queryElements(query);
-                
-                if (!results || results.length === 0) {
-                    showMessage('Geen IfcSlab elementen gevonden', 'error');
-                    return;
-                }
-                
-                allSlabs = results;
-                displayFloorList(results);
-                showMessage(`${results.length} vloeren gevonden`, 'info');
-                
-            } catch (error) {
-                showMessage(`Fout: ${error.message}`, 'error');
-                console.error('Error:', error);
-            }
-        }
-        
-        // Display floor list
-        function displayFloorList(slabs = allSlabs) {
-            const listDiv = document.getElementById('floorEdgesList');
-            
-            if (!slabs || slabs.length === 0) {
-                listDiv.innerHTML = '';
-                return;
-            }
-            
-            let html = '<h3>Gevonden Vloerranden:</h3>';
-            slabs.forEach(floor => {
-                const isHighlighted = highlightedFloors.some(f => f.id === floor.id);
-                html += `
-                    <div class="floor-item ${isHighlighted ? 'highlighted' : ''}" 
-                         onclick="highlightSingleFloor('${floor.id}')">
-                        <strong>${floor.name || floor.id}</strong>
-                        <small>(ID: ${floor.id})</small>
-                    </div>
-                `;
             });
-            
-            listDiv.innerHTML = html;
         }
         
-        // Highlight één vloer
-        async function highlightSingleFloor(floorId) {
-            if (!API) return;
+        async function getModelInfo() {
+            if (!API) {
+                addDebug('API is niet geïnitialiseerd');
+                return;
+            }
+            
+            addDebug('=== MODEL INFORMATIE ===\n');
             
             try {
-                await API.selection.selectElement(floorId, true);
-                showMessage(`Vloer ${floorId} is gemarkeerd`, 'success');
+                // Probeer project info
+                if (API.project && typeof API.project.getProject === 'function') {
+                    const project = await API.project.getProject();
+                    addDebug('Project:', JSON.stringify(project, null, 2));
+                }
+                
+                // Probeer andere methodes
+                if (API.view) {
+                    addDebug('\nView methodes beschikbaar:', Object.keys(API.view).join(', '));
+                }
+                
+                if (API.selection) {
+                    addDebug('\nSelection methodes beschikbaar:', Object.keys(API.selection).join(', '));
+                }
+                
+                if (API.3d) {
+                    addDebug('\n3D methodes beschikbaar:', Object.keys(API['3d']).join(', '));
+                }
+                
             } catch (error) {
-                console.error('Error:', error);
-                showMessage(`Fout: ${error.message}`, 'error');
+                addDebug('Fout:', error.message);
             }
         }
         
-        // Help functie om berichten te tonen
-        function showMessage(text, type = 'info') {
-            const resultDiv = document.getElementById('result');
-            const messageDiv = document.getElementById('message');
-            
-            resultDiv.classList.add('show');
-            messageDiv.className = type;
-            messageDiv.textContent = text;
+        function addDebug(title, content = '') {
+            const debugDiv = document.getElementById('debug');
+            let text = title;
+            if (content) {
+                if (typeof content === 'string') {
+                    text += '\n' + content;
+                } else {
+                    text += '\n' + JSON.stringify(content, null, 2);
+                }
+            }
+            debugDiv.textContent += text + '\n\n';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
         }
         
-        // Initialiseer API wanneer pagina laadt
         window.addEventListener('load', initAPI);
     </script>
 </body>
