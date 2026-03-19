@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>project naam fetch</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .error {
+            color: #d32f2f;
+        }
+        .success {
+            color: #388e3c;
+        }
+        .loading {
+            color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trimble Connect Test tool</h1>
+        
+        <button onclick="fetchProjectName()">project naam</button>
+        
+        <div id="result" class="result">
+            <p id="message"></p>
+        </div>
+    </div>
+
+    <!-- Trimble Connect Workspace API Script -->
+    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+    
+    <script>
+        async function fetchProjectName() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                // Status bijwerken
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Project naam ophalen...';
+                
+                // Verbinding maken met Trimble Connect API
+                // Voor extensies: window.parent gebruiken
+                // Voor embedded components: het iframe element gebruiken
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                        
+                        // Luisteren naar token events (voor extensies)
+                        if (event === 'extension.accessToken') {
+                            console.log('Access Token Status:', data);
+                        }
+                    }
+                );
+                
+                // Request permission voor access token (belangrijk voor extensies)
+                const tokenStatus = await API.extension.requestPermission('accesstoken');
+                console.log('Token Status:', tokenStatus);
+                
+                // Project informatie ophalen
+                const project = await API.project.getProject();
+                
+                if (project && project.name) {
+                    messageDiv.className = 'success';
+                    messageDiv.innerHTML = `
+                        <strong>Project Naam:</strong> ${project.name}<br>
+                        <strong>Project ID:</strong> ${project.id || 'N/A'}<br>
+                        <strong>Project Beschrijving:</strong> ${project.description || 'N/A'}
+                    `;
+                } else {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen project informatie gevonden.';
+                }
+                
+            } catch (error) {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'error';
+                messageDiv.innerHTML = `
+                    <strong>Fout:</strong> ${error.message}<br>
+                    <small>Zorg ervoor dat deze pagina is ingebed als een Trimble Connect extensie.</small>
+                `;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
