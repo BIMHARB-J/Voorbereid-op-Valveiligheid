@@ -6,6 +6,7 @@
 <body>
   <h2>Trimble tool</h2>
   <button onclick="getProject()">Project naam ophalen</button>
+  <button onclick="highlightFloors()">Highlight Floors</button>
 
   <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 
@@ -13,16 +14,33 @@
     let API;
 
     async function init() {
+      // Verbind met Trimble Connect
       API = await WorkspaceAPI.connect(window.parent);
       console.log("Verbonden met Trimble");
     }
 
+    // Project naam ophalen
     async function getProject() {
       const project = await API.project.getProject();
       alert("Project: " + project.name);
+    }
+
+    // Highlight Floors in IFC
+    async function highlightFloors() {
+      // Haal alle geladen modellen op
+      const models = await API.viewer.getModels();
+
+      // Filter alle objects die IfcSlab zijn (vloervelden)
+      const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
+
+      // Highlight deze objects in de viewer
+      API.viewer.highlight(floors);
+
+      alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
     }
 
     init();
   </script>
 </body>
 </html>
+
