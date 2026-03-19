@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
-  <title>Trimble Extension</title>
+  <title>Trimble Tool</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     button { margin: 5px 0; padding: 10px 15px; }
@@ -13,7 +13,6 @@
   <button id="btnProject" disabled>Project naam ophalen</button>
   <button id="btnHighlight" disabled>Highlight Floors</button>
 
-  <!-- Gebruik type="module" voor ES module import -->
   <script type="module">
     import { WorkspaceAPI } from 'https://components.connect.trimble.com/trimble-connect-workspace-api/index.js';
 
@@ -21,19 +20,16 @@
 
     async function init() {
       try {
-        console.log("Probeer verbinding te maken met Trimble WorkspaceAPI...");
-        
-        // Connectie vanuit iframe
-        API = await WorkspaceAPI.connect(window.parent || window);
-        console.log("Verbonden met Trimble:", API);
+        // Connectie met Trimble Connect (iframe)
+        API = await WorkspaceAPI.connect(window.parent);
+        console.log("Verbonden met Trimble API:", API);
 
         // Knoppen activeren
         document.getElementById("btnProject").disabled = false;
         document.getElementById("btnHighlight").disabled = false;
-
       } catch (e) {
         console.error("Kan niet verbinden met Trimble API:", e);
-        alert("Kan niet verbinden met Trimble API. Zorg dat deze pagina in Trimble Connect draait.");
+        alert("Zorg dat deze pagina in Trimble Connect draait.");
       }
     }
 
@@ -51,8 +47,6 @@
       if (!API) return console.error("API niet verbonden!");
       try {
         const models = await API.viewer.getModels();
-        console.log("Models:", models);
-
         const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
         if (floors.length > 0) {
           API.viewer.highlight(floors);
@@ -65,12 +59,11 @@
       }
     }
 
-    // Event listeners
+    // Event listeners voor knoppen
     document.getElementById("btnProject").addEventListener("click", getProject);
     document.getElementById("btnHighlight").addEventListener("click", highlightFloors);
 
-    // Start connectie
-    init();
+    window.addEventListener('load', init);
   </script>
 </body>
 </html>
