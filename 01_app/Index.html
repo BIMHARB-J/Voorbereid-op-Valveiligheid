@@ -13,18 +13,16 @@
   <button id="btnProject" disabled>Project naam ophalen</button>
   <button id="btnHighlight" disabled>Highlight Floors</button>
 
-  <script type="module">
-    import { WorkspaceAPI } from 'https://components.connect.trimble.com/trimble-connect-workspace-api/index.js';
-
+  <script>
     let API;
 
     async function init() {
       try {
-        // Connectie met Trimble Connect (iframe)
+        // WorkspaceAPI is globaal beschikbaar in Trimble Connect iframe
         API = await WorkspaceAPI.connect(window.parent);
         console.log("Verbonden met Trimble API:", API);
 
-        // Knoppen activeren
+        // Knoppen activeren zodra connectie gelukt is
         document.getElementById("btnProject").disabled = false;
         document.getElementById("btnHighlight").disabled = false;
       } catch (e) {
@@ -34,7 +32,6 @@
     }
 
     async function getProject() {
-      if (!API) return console.error("API niet verbonden!");
       try {
         const project = await API.project.getProject();
         alert("Project: " + project.name);
@@ -44,7 +41,6 @@
     }
 
     async function highlightFloors() {
-      if (!API) return console.error("API niet verbonden!");
       try {
         const models = await API.viewer.getModels();
         const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
@@ -59,10 +55,11 @@
       }
     }
 
-    // Event listeners voor knoppen
+    // Event listeners voor de knoppen
     document.getElementById("btnProject").addEventListener("click", getProject);
     document.getElementById("btnHighlight").addEventListener("click", highlightFloors);
 
+    // Init connectie bij laden
     window.addEventListener('load', init);
   </script>
 </body>
