@@ -3,6 +3,5 @@
     "title": "projectnaam ophalen",
     "url": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/01_app/Index.html",
     "description": "Test",
-    "configCommand": "do_config",
     "enabled": true
 }
