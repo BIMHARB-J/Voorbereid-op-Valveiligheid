@@ -1,7 +1,8 @@
 {
-	"name": "projectnaam ophalen",
-	"version": "1.0",
-	"manifest_version": 1,
-	"main": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/01_app/Index.html",
-	"icon": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/02_icon/safety.png"
+    "icon": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/02_icon/safety.png",
+    "title": "projectnaam ophalen",
+    "url": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/01_app/Index.html",
+    "description": "Test",
+    "configCommand": "do_config",
+    "enabled": true
 }
