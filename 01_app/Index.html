@@ -27,16 +27,18 @@
 
     // Highlight Floors in IFC
     async function highlightFloors() {
-      // Haal alle geladen modellen op
       const models = await API.viewer.getModels();
+      console.log("Models:", models);
 
-      // Filter alle objects die IfcSlab zijn (vloervelden)
       const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
+      console.log("Floors gevonden:", floors);
 
-      // Highlight deze objects in de viewer
-      API.viewer.highlight(floors);
-
-      alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
+      if(floors.length > 0) {
+        API.viewer.highlight(floors);
+        alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
+      } else {
+        alert("Geen vloervelden gevonden. Controleer object type!");
+      }
     }
 
     init();
