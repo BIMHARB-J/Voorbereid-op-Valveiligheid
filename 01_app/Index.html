@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trimble Connect IFC Viewer - Debug API</title>
+    <title>Trimble Connect IFC Viewer - Floor Edges Highlighter</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 20px auto;
             padding: 20px;
         }
@@ -15,6 +15,13 @@
             border: 1px solid #ddd;
             padding: 20px;
             border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         button {
             background-color: #0066cc;
@@ -23,53 +30,318 @@
             border: none;
             border-radius: 3px;
             cursor: pointer;
-            margin: 5px;
+            font-size: 16px;
         }
         button:hover {
             background-color: #0052a3;
         }
-        #debug {
-            background-color: #f5f5f5;
-            border: 1px solid #ddd;
-            padding: 15px;
+        button.secondary {
+            background-color: #666;
+        }
+        button.secondary:hover {
+            background-color: #444;
+        }
+        button.danger {
+            background-color: #d32f2f;
+        }
+        button.danger:hover {
+            background-color: #b71c1c;
+        }
+        .result {
             margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
             border-radius: 3px;
-            max-height: 600px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .error {
+            color: #d32f2f;
+            border-left: 4px solid #d32f2f;
+            padding: 10px;
+        }
+        .success {
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+            padding: 10px;
+        }
+        .loading {
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+            padding: 10px;
+        }
+        .info {
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+            padding: 10px;
+        }
+        #floorEdgesList {
+            margin-top: 10px;
+            max-height: 300px;
             overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-            white-space: pre-wrap;
-            line-height: 1.4;
+        }
+        .floor-item {
+            padding: 8px;
+            background-color: white;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .floor-item:hover {
+            background-color: #e3f2fd;
+        }
+        .floor-item.highlighted {
+            background-color: #ffeb3b;
+            border-color: #fbc02d;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Trimble Connect API Debug</h1>
-        <button onclick="inspectAPI()">🔍 Inspecteer Alle API Methodes</button>
-        <button onclick="clearDebug()">🗑️ Leeg Debug</button>
+        <h1>Trimble Connect IFC Viewer - Vloerranden Highlighter</h1>
         
-        <div id="debug"></div>
+        <div class="controls">
+            <button onclick="highlightFloorEdges()">🎯 Vloerranden Highlighten</button>
+            <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
+            <button class="secondary" onclick="showFloorList()">📋 Toon Alle Vloeren</button>
+            <button class="danger" onclick="isolateFloorEdges()">🔍 Alleen Vloerranden Tonen</button>
+        </div>
+        
+        <div id="result" class="result">
+            <p id="message"></p>
+        </div>
+        
+        <div id="floorEdgesList"></div>
     </div>
 
+    <!-- Trimble Connect Workspace API Script -->
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     
     <script>
-        function addDebug(text) {
-            const debugDiv = document.getElementById('debug');
-            debugDiv.textContent += text + '\n';
-            debugDiv.scrollTop = debugDiv.scrollHeight;
-            console.log(text);
-        }
+        let highlightedFloors = [];
+        let allSlabs = [];
         
-        function clearDebug() {
-            document.getElementById('debug').textContent = '';
-        }
-        
-        async function inspectAPI() {
-            clearDebug();
-            addDebug('=== TRIMBLE CONNECT API INSPECTIE ===\n');
+        // Vloerranden highlighten
+        async function highlightFloorEdges() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
             
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Vloerranden zoeken en highlighten...';
+                
+                // Maak API connectie
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                // Haal alle objecten op
+                const allObjects = await API.viewer.getObjects();
+                console.log('Totaal objecten in model:', allObjects.length);
+                
+                if (!allObjects || allObjects.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen objecten gevonden in het model';
+                    return;
+                }
+                
+                // Filter op IfcSlab type
+                const slabs = allObjects.filter(obj => {
+                    // Controleer op IFC type in properties
+                    const ifc_type = obj.ifc_type || obj.ifcType || obj.type || '';
+                    return ifc_type.toLowerCase().includes('slab') || 
+                           (obj.name && obj.name.toLowerCase().includes('slab')) ||
+                           (obj.category && obj.category.toLowerCase().includes('slab'));
+                });
+                
+                console.log('Gevonden slabs:', slabs.length);
+                
+                if (slabs.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen IfcSlab elementen gevonden. Probeer andere filter...';
+                    
+                    // Toon alle unieke types
+                    const types = [...new Set(allObjects.map(o => o.ifc_type || o.ifcType || o.type || 'unknown'))];
+                    console.log('Beschikbare types:', types);
+                    messageDiv.innerHTML += `<br><small>Beschikbare types: ${types.join(', ')}</small>`;
+                    return;
+                }
+                
+                // Highlight alle slabs
+                highlightedFloors = slabs.map(slab => ({
+                    id: slab.id,
+                    name: slab.name || `Vloer ${slab.id}`,
+                    dbId: slab.dbId || slab.id
+                }));
+                
+                // Selecteer alle slab IDs
+                const slabIds = slabs.map(s => s.dbId || s.id);
+                await API.viewer.setSelection(slabIds);
+                
+                messageDiv.className = 'success';
+                messageDiv.textContent = `✓ ${slabs.length} vloerranden zijn gemarkeerd!`;
+                displayFloorList();
+                
+            } catch (error) {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'error';
+                messageDiv.innerHTML = `
+                    <strong>Fout:</strong> ${error.message}<br>
+                    <small>Check de browser console voor meer details.</small>
+                `;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Reset highlight
+        async function resetHighlight() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Highlight wordt gereset...';
+                
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                // Clear selection
+                await API.viewer.setSelection([]);
+                
+                highlightedFloors = [];
+                document.getElementById('floorEdgesList').innerHTML = '';
+                
+                messageDiv.className = 'success';
+                messageDiv.textContent = '✓ Highlight is gereset';
+                
+            } catch (error) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Fout bij reset: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Toon alle vloeren
+        async function showFloorList() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Vloeren ophalen...';
+                
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                // Haal alle objecten op
+                const allObjects = await API.viewer.getObjects();
+                
+                // Filter op IfcSlab type
+                const slabs = allObjects.filter(obj => {
+                    const ifc_type = obj.ifc_type || obj.ifcType || obj.type || '';
+                    return ifc_type.toLowerCase().includes('slab') || 
+                           (obj.name && obj.name.toLowerCase().includes('slab')) ||
+                           (obj.category && obj.category.toLowerCase().includes('slab'));
+                });
+                
+                if (slabs.length > 0) {
+                    allSlabs = slabs;
+                    displayFloorList();
+                    messageDiv.className = 'info';
+                    messageDiv.textContent = `${slabs.length} vloeren gevonden`;
+                } else {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen IfcSlab elementen gevonden';
+                }
+                
+            } catch (error) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Fout: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Isoleer alleen vloerranden
+        async function isolateFloorEdges() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Alleen vloerranden isoleren...';
+                
+                if (highlightedFloors.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen vloerranden geselecteerd. Klik eerst op "Vloerranden Highlighten"';
+                    return;
+                }
+                
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                // Isoleer de vloeren
+                const slabIds = highlightedFloors.map(f => f.dbId || f.id);
+                await API.viewer.isolateEntities(slabIds);
+                
+                messageDiv.className = 'success';
+                messageDiv.textContent = `✓ ${slabIds.length} vloeren zijn geïsoleerd`;
+                
+            } catch (error) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Fout: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Display floor list
+        function displayFloorList(slabs = allSlabs) {
+            const listDiv = document.getElementById('floorEdgesList');
+            
+            if (!slabs || slabs.length === 0) {
+                listDiv.innerHTML = '';
+                return;
+            }
+            
+            let html = '<h3>Gevonden Vloerranden:</h3>';
+            slabs.forEach(floor => {
+                const isHighlighted = highlightedFloors.some(f => f.id === floor.id);
+                html += `
+                    <div class="floor-item ${isHighlighted ? 'highlighted' : ''}" 
+                         onclick="highlightSingleFloor('${floor.dbId || floor.id}')">
+                        <strong>${floor.name || floor.id}</strong>
+                        <small>(ID: ${floor.id})</small>
+                    </div>
+                `;
+            });
+            
+            listDiv.innerHTML = html;
+        }
+        
+        // Highlight één vloer
+        async function highlightSingleFloor(floorId) {
             try {
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
@@ -78,41 +350,11 @@
                     }
                 );
                 
-                addDebug('✓ API verbonden!\n');
-                addDebug('=== HOOFD API OBJECTEN ===');
-                
-                const apiKeys = Object.keys(API);
-                addDebug(`Objecten: ${apiKeys.join(', ')}\n`);
-                
-                // Voor elk object, log alle methodes
-                for (const key of apiKeys) {
-                    const obj = API[key];
-                    if (obj && typeof obj === 'object') {
-                        const methods = Object.keys(obj);
-                        addDebug(`\n${key}:`);
-                        addDebug(`  Methodes: ${methods.join(', ')}`);
-                        
-                        // Log ook de type van elke methode
-                        methods.forEach(method => {
-                            const type = typeof obj[method];
-                            addDebug(`    - ${method}: ${type}`);
-                        });
-                    }
-                }
-                
-                // Probeer project info te halen
-                addDebug('\n\n=== PROJECT INFORMATIE TEST ===');
-                try {
-                    const project = await API.project.getProject();
-                    addDebug(`✓ Project naam: ${project.name}`);
-                    addDebug(`  Project ID: ${project.id}`);
-                } catch (e) {
-                    addDebug(`✗ getProject() fout: ${e.message}`);
-                }
+                await API.viewer.setSelection([floorId]);
+                console.log(`Vloer ${floorId} is gemarkeerd`);
                 
             } catch (error) {
-                addDebug(`✗ FOUT: ${error.message}`);
-                addDebug(`Stack: ${error.stack}`);
+                console.error('Error:', error);
             }
         }
     </script>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trimble Connect IFC Viewer - Debug API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        #debug {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 3px;
+            max-height: 600px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trimble Connect API Debug</h1>
+        <button onclick="inspectAPI()">🔍 Inspecteer Alle API Methodes</button>
+        <button onclick="clearDebug()">🗑️ Leeg Debug</button>
+        
+        <div id="debug"></div>
+    </div>
+
+    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+    
+    <script>
+        function addDebug(text) {
+            const debugDiv = document.getElementById('debug');
+            debugDiv.textContent += text + '\n';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+            console.log(text);
+        }
+        
+        function clearDebug() {
+            document.getElementById('debug').textContent = '';
+        }
+        
+        async function inspectAPI() {
+            clearDebug();
+            addDebug('=== TRIMBLE CONNECT API INSPECTIE ===\n');
+            
+            try {
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                addDebug('✓ API verbonden!\n');
+                addDebug('=== HOOFD API OBJECTEN ===');
+                
+                const apiKeys = Object.keys(API);
+                addDebug(`Objecten: ${apiKeys.join(', ')}\n`);
+                
+                // Voor elk object, log alle methodes
+                for (const key of apiKeys) {
+                    const obj = API[key];
+                    if (obj && typeof obj === 'object') {
+                        const methods = Object.keys(obj);
+                        addDebug(`\n${key}:`);
+                        addDebug(`  Methodes: ${methods.join(', ')}`);
+                        
+                        // Log ook de type van elke methode
+                        methods.forEach(method => {
+                            const type = typeof obj[method];
+                            addDebug(`    - ${method}: ${type}`);
+                        });
+                    }
+                }
+                
+                // Probeer project info te halen
+                addDebug('\n\n=== PROJECT INFORMATIE TEST ===');
+                try {
+                    const project = await API.project.getProject();
+                    addDebug(`✓ Project naam: ${project.name}`);
+                    addDebug(`  Project ID: ${project.id}`);
+                } catch (e) {
+                    addDebug(`✗ getProject() fout: ${e.message}`);
+                }
+                
+            } catch (error) {
+                addDebug(`✗ FOUT: ${error.message}`);
+                addDebug(`Stack: ${error.stack}`);
+            }
+        }
+    </script>
+</body>
+</html>
