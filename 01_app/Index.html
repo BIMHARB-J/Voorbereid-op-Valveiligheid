@@ -123,6 +123,7 @@
     <script>
         let API = null;
         let highlightedFloors = [];
+        let allSlabs = [];
         
         // Initialiseer API bij pagina laden
         async function initAPI() {
@@ -134,6 +135,7 @@
                     }
                 );
                 console.log('API initialized successfully');
+                showMessage('API verbonden. Klik op "Vloerranden Highlighten" om te starten.', 'info');
             } catch (error) {
                 console.error('Failed to initialize API:', error);
                 showMessage('API initialisatie mislukt. Zorg dat dit een Trimble Connect extensie is.', 'error');
@@ -150,43 +152,41 @@
             try {
                 showMessage('Vloerranden zoeken en highlighten...', 'loading');
                 
-                // Haal alle IfcSlab elementen op
-                const slabs = await API.model.getElementsByType('IfcSlab');
+                // Query naar alle IfcSlab elementen
+                const query = {
+                    selector: 'IfcSlab'
+                };
                 
-                if (!slabs || slabs.length === 0) {
+                // Gebruik de query API om elementen te vinden
+                const results = await API.query.queryElements(query);
+                
+                if (!results || results.length === 0) {
                     showMessage('Geen IfcSlab elementen gevonden in het model', 'error');
                     return;
                 }
                 
-                console.log(`${slabs.length} IfcSlab elementen gevonden`);
+                console.log(`${results.length} IfcSlab elementen gevonden`);
                 
-                // Highlight alle slabs met edge style
-                const highlightConfig = {
-                    color: [255, 0, 0], // Rood
-                    opacity: 1.0,
-                    edgeHighlight: true,
-                    edgeColor: [255, 100, 0], // Oranje voor edges
-                    edgeWidth: 3
-                };
-                
+                allSlabs = results;
                 highlightedFloors = [];
                 
-                for (const slab of slabs) {
-                    // Selecteer het element (dit highlight het)
-                    await API.view.selectElement({
-                        id: slab.id,
-                        highlight: true,
-                        color: highlightConfig.color
-                    });
-                    
-                    highlightedFloors.push({
-                        id: slab.id,
-                        name: slab.name || `Vloer ${slab.id}`
-                    });
+                // Highlight alle slabs
+                for (const slab of results) {
+                    try {
+                        // Selecteer en highlight het element
+                        await API.selection.selectElement(slab.id, true);
+                        
+                        highlightedFloors.push({
+                            id: slab.id,
+                            name: slab.name || `Vloer ${slab.id}`
+                        });
+                    } catch (e) {
+                        console.warn(`Kon vloer ${slab.id} niet highlighten:`, e);
+                    }
                 }
                 
                 showMessage(
-                    `✓ ${highlightedFloors.length} vloerranden zijn gemarkeerd met een rode/oranje highlight!`,
+                    `✓ ${highlightedFloors.length} vloerranden zijn gemarkeerd!`,
                     'success'
                 );
                 
@@ -206,8 +206,8 @@
             try {
                 showMessage('Highlight wordt gereset...', 'loading');
                 
-                // Deselect alle elementen
-                await API.view.clearSelection();
+                // Clear selection
+                await API.selection.clearSelection();
                 
                 highlightedFloors = [];
                 document.getElementById('floorEdgesList').innerHTML = '';
@@ -230,21 +230,28 @@
             try {
                 showMessage('Alleen vloerranden isoleren...', 'loading');
                 
-                // Haal alle IfcSlab elementen op
-                const slabs = await API.model.getElementsByType('IfcSlab');
+                // Query naar alle IfcSlab elementen
+                const query = {
+                    selector: 'IfcSlab'
+                };
                 
-                if (!slabs || slabs.length === 0) {
+                const results = await API.query.queryElements(query);
+                
+                if (!results || results.length === 0) {
                     showMessage('Geen IfcSlab elementen gevonden', 'error');
                     return;
                 }
                 
                 // Isoleer deze elementen
-                const slabIds = slabs.map(s => s.id);
+                const slabIds = results.map(s => s.id);
                 
-                await API.view.isolateElements({
-                    ids: slabIds,
-                    hideOthers: true
-                });
+                // Selecteer allen en isoleer
+                for (const id of slabIds) {
+                    await API.selection.selectElement(id, true);
+                }
+                
+                // Isoleer view
+                await API.view.isolate(slabIds);
                 
                 showMessage(`✓ ${slabIds.length} vloeren zijn geïsoleerd. Andere elementen zijn verborgen.`, 'success');
                 
@@ -264,15 +271,21 @@
             try {
                 showMessage('Vloeren ophalen...', 'loading');
                 
-                const slabs = await API.model.getElementsByType('IfcSlab');
+                // Query naar alle IfcSlab elementen
+                const query = {
+                    selector: 'IfcSlab'
+                };
                 
-                if (!slabs || slabs.length === 0) {
+                const results = await API.query.queryElements(query);
+                
+                if (!results || results.length === 0) {
                     showMessage('Geen IfcSlab elementen gevonden', 'error');
                     return;
                 }
                 
-                displayFloorList(slabs);
-                showMessage(`${slabs.length} vloeren gevonden`, 'info');
+                allSlabs = results;
+                displayFloorList(results);
+                showMessage(`${results.length} vloeren gevonden`, 'info');
                 
             } catch (error) {
                 showMessage(`Fout: ${error.message}`, 'error');
@@ -281,7 +294,7 @@
         }
         
         // Display floor list
-        function displayFloorList(slabs = highlightedFloors) {
+        function displayFloorList(slabs = allSlabs) {
             const listDiv = document.getElementById('floorEdgesList');
             
             if (!slabs || slabs.length === 0) {
@@ -289,7 +302,7 @@
                 return;
             }
             
-            let html = '<h3>Gemarkeerde Vloerranden:</h3>';
+            let html = '<h3>Gevonden Vloerranden:</h3>';
             slabs.forEach(floor => {
                 const isHighlighted = highlightedFloors.some(f => f.id === floor.id);
                 html += `
@@ -309,15 +322,11 @@
             if (!API) return;
             
             try {
-                await API.view.selectElement({
-                    id: floorId,
-                    highlight: true,
-                    color: [255, 0, 0]
-                });
-                
+                await API.selection.selectElement(floorId, true);
                 showMessage(`Vloer ${floorId} is gemarkeerd`, 'success');
             } catch (error) {
                 console.error('Error:', error);
+                showMessage(`Fout: ${error.message}`, 'error');
             }
         }
         
