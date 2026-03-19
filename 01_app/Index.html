@@ -1,54 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="nl">
 <head>
+  <meta charset="UTF-8">
   <title>Trimble Extension</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { margin: 5px 0; padding: 10px 15px; }
+  </style>
 </head>
 <body>
-  <h2>Trimble tool</h2>
+  <h2>Trimble Tool</h2>
   <button id="btnProject" disabled>Project naam ophalen</button>
   <button id="btnHighlight" disabled>Highlight Floors</button>
 
-  <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+  <!-- Gebruik type="module" voor ES module import -->
+  <script type="module">
+    import { WorkspaceAPI } from 'https://components.connect.trimble.com/trimble-connect-workspace-api/index.js';
 
-  <script>
-  let API;
+    let API;
 
-  async function init() {
-    try {
-      API = await WorkspaceAPI.connect(window.parent);
-      console.log("Verbonden met Trimble");
+    async function init() {
+      try {
+        console.log("Probeer verbinding te maken met Trimble WorkspaceAPI...");
+        
+        // Connectie vanuit iframe
+        API = await WorkspaceAPI.connect(window.parent || window);
+        console.log("Verbonden met Trimble:", API);
 
-      // Knoppen activeren
-      document.getElementById("btnProject").disabled = false;
-      document.getElementById("btnHighlight").disabled = false;
-    } catch(e) {
-      console.error("Kan niet verbinden met Trimble API:", e);
+        // Knoppen activeren
+        document.getElementById("btnProject").disabled = false;
+        document.getElementById("btnHighlight").disabled = false;
+
+      } catch (e) {
+        console.error("Kan niet verbinden met Trimble API:", e);
+        alert("Kan niet verbinden met Trimble API. Zorg dat deze pagina in Trimble Connect draait.");
+      }
     }
-  }
 
-  async function getProject() {
-    if(!API) return console.error("API niet verbonden!");
-    const project = await API.project.getProject();
-    alert("Project: " + project.name);
-  }
-
-  async function highlightFloors() {
-    if(!API) return console.error("API niet verbonden!");
-    const models = await API.viewer.getModels();
-    console.log("Models:", models);
-
-    const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
-    if(floors.length > 0){
-      API.viewer.highlight(floors);
-      alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
-    } else {
-      alert("Geen vloervelden gevonden!");
+    async function getProject() {
+      if (!API) return console.error("API niet verbonden!");
+      try {
+        const project = await API.project.getProject();
+        alert("Project: " + project.name);
+      } catch (e) {
+        console.error("Fout bij ophalen project:", e);
+      }
     }
-  }
 
-  init();
+    async function highlightFloors() {
+      if (!API) return console.error("API niet verbonden!");
+      try {
+        const models = await API.viewer.getModels();
+        console.log("Models:", models);
+
+        const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
+        if (floors.length > 0) {
+          API.viewer.highlight(floors);
+          alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
+        } else {
+          alert("Geen vloervelden gevonden!");
+        }
+      } catch (e) {
+        console.error("Fout bij highlightFloors:", e);
+      }
+    }
+
+    // Event listeners
+    document.getElementById("btnProject").addEventListener("click", getProject);
+    document.getElementById("btnHighlight").addEventListener("click", highlightFloors);
+
+    // Start connectie
+    init();
   </script>
 </body>
 </html>
-
-
