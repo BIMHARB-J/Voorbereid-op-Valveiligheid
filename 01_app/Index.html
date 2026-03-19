@@ -5,44 +5,50 @@
 </head>
 <body>
   <h2>Trimble tool</h2>
-  <button onclick="getProject()">Project naam ophalen</button>
-  <button onclick="highlightFloors()">Highlight Floors</button>
+  <button id="btnProject" disabled>Project naam ophalen</button>
+  <button id="btnHighlight" disabled>Highlight Floors</button>
 
   <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 
   <script>
-    let API;
+  let API;
 
-    async function init() {
-      // Verbind met Trimble Connect
+  async function init() {
+    try {
       API = await WorkspaceAPI.connect(window.parent);
       console.log("Verbonden met Trimble");
+
+      // Knoppen activeren
+      document.getElementById("btnProject").disabled = false;
+      document.getElementById("btnHighlight").disabled = false;
+    } catch(e) {
+      console.error("Kan niet verbinden met Trimble API:", e);
     }
+  }
 
-    // Project naam ophalen
-    async function getProject() {
-      const project = await API.project.getProject();
-      alert("Project: " + project.name);
+  async function getProject() {
+    if(!API) return console.error("API niet verbonden!");
+    const project = await API.project.getProject();
+    alert("Project: " + project.name);
+  }
+
+  async function highlightFloors() {
+    if(!API) return console.error("API niet verbonden!");
+    const models = await API.viewer.getModels();
+    console.log("Models:", models);
+
+    const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
+    if(floors.length > 0){
+      API.viewer.highlight(floors);
+      alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
+    } else {
+      alert("Geen vloervelden gevonden!");
     }
+  }
 
-    // Highlight Floors in IFC
-    async function highlightFloors() {
-      const models = await API.viewer.getModels();
-      console.log("Models:", models);
-
-      const floors = models.flatMap(m => m.objects.filter(o => o.type === "IfcSlab"));
-      console.log("Floors gevonden:", floors);
-
-      if(floors.length > 0) {
-        API.viewer.highlight(floors);
-        alert(`Aantal vloervelden geselecteerd: ${floors.length}`);
-      } else {
-        alert("Geen vloervelden gevonden. Controleer object type!");
-      }
-    }
-
-    init();
+  init();
   </script>
 </body>
 </html>
+
 
