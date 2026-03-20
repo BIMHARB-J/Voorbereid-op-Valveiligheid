@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trimble Connect - Nested Objects Debug</title>
+    <title>Trimble Connect - Object Properties via API</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -42,8 +42,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>Trimble Connect - Nested Objects Inspector</h1>
-        <button onclick="inspectNestedObjects()">🔍 Inspecteer Nested Objects</button>
+        <h1>Trimble Connect - Object Properties via API</h1>
+        <button onclick="inspectObjectProperties()">🔍 Inspecteer Object Properties via API</button>
         <button onclick="clearDebug()">🗑️ Leeg</button>
         
         <div id="debug"></div>
@@ -62,9 +62,9 @@
             document.getElementById('debug').textContent = '';
         }
         
-        async function inspectNestedObjects() {
+        async function inspectObjectProperties() {
             clearDebug();
-            addDebug('=== NESTED OBJECTS INSPECTIE ===\n');
+            addDebug('=== OBJECT PROPERTIES VIA API ===\n');
             
             try {
                 const API = await TrimbleConnectWorkspace.connect(
@@ -76,75 +76,63 @@
                 
                 // Haal alle objecten op
                 const allObjects = await API.viewer.getObjects();
-                addDebug(`Totaal objecten (top level): ${allObjects.length}`);
+                const nestedObjects = allObjects[0].objects;
                 
-                if (allObjects.length === 0) {
-                    addDebug('Geen objecten gevonden!');
-                    return;
-                }
+                addDebug(`Totaal objecten: ${nestedObjects.length}`);
+                addDebug('Laden van properties...\n');
                 
-                // Controleer het eerste object
-                const firstObj = allObjects[0];
-                addDebug(`\nEerste object properties: modelId, objects`);
-                addDebug(`objects array length: ${firstObj.objects.length}\n`);
+                // Haal properties voor eerste 20 objecten
+                const samplesToCheck = 20;
+                const propertyMap = new Map();
                 
-                // Inspecteer nested objects
-                addDebug('=== EERSTE 10 NESTED OBJECTS ===\n');
-                for (let i = 0; i < Math.min(10, firstObj.objects.length); i++) {
-                    const obj = firstObj.objects[i];
-                    addDebug(`\nNested Object ${i}:`);
+                for (let i = 0; i < Math.min(samplesToCheck, nestedObjects.length); i++) {
+                    const objId = nestedObjects[i].id;
                     
-                    for (const [key, value] of Object.entries(obj)) {
-                        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-                            addDebug(`  ${key}: ${value}`);
-                        } else if (Array.isArray(value)) {
-                            addDebug(`  ${key}: [Array(${value.length})]`);
-                        } else if (typeof value === 'object' && value !== null) {
-                            addDebug(`  ${key}: ${JSON.stringify(value)}`);
+                    try {
+                        const props = await API.viewer.getObjectProperties(objId);
+                        
+                        if (props && props.length > 0) {
+                            addDebug(`\n=== Object ID ${objId} ===`);
+                            addDebug(`Properties count: ${props.length}`);
+                            
+                            props.forEach(prop => {
+                                addDebug(`  ${prop.name}: ${prop.value}`);
+                                
+                                // Track property names
+                                if (!propertyMap.has(prop.name)) {
+                                    propertyMap.set(prop.name, []);
+                                }
+                                propertyMap.get(prop.name).push(prop.value);
+                            });
+                        } else {
+                            addDebug(`\nObject ID ${objId}: Geen properties`);
                         }
+                    } catch (e) {
+                        addDebug(`\nObject ID ${objId}: Fout - ${e.message}`);
                     }
                 }
                 
-                // Analyseer alle nested properties
-                addDebug('\n\n=== PROPERTY ANALYSE NESTED ===\n');
-                const allProperties = new Set();
-                firstObj.objects.forEach(obj => {
-                    Object.keys(obj).forEach(key => allProperties.add(key));
-                });
+                // Samenvattting
+                addDebug('\n\n=== PROPERTY SUMMARY ===\n');
+                for (const [propName, values] of propertyMap) {
+                    const uniqueValues = [...new Set(values)];
+                    addDebug(`${propName}: ${uniqueValues.slice(0, 5).join(', ')}${uniqueValues.length > 5 ? '...' : ''}`);
+                }
                 
-                addDebug(`Alle unieke properties: ${Array.from(allProperties).join(', ')}\n`);
-                
-                // Controleer op floor/slab termen
-                addDebug('=== ZOEKEN NAAR FLOOR/SLAB TERMEN ===\n');
-                const floorLikeObjects = firstObj.objects.filter(obj => {
-                    const stringified = JSON.stringify(obj).toLowerCase();
-                    return stringified.includes('floor') || 
-                           stringified.includes('slab') || 
-                           stringified.includes('niveau') ||
-                           stringified.includes('verdieping') ||
-                           stringified.includes('vloer');
-                });
-                
-                addDebug(`Gevonden ${floorLikeObjects.length} objecten met floor/slab termen\n`);
-                
-                floorLikeObjects.slice(0, 3).forEach((obj, i) => {
-                    addDebug(`\nFloor-like object ${i}:`);
-                    for (const [key, value] of Object.entries(obj)) {
-                        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-                            addDebug(`  ${key}: ${value}`);
-                        }
+                // Zoek naar floor/slab property values
+                addDebug('\n\n=== FLOOR/SLAB SEARCH ===\n');
+                for (const [propName, values] of propertyMap) {
+                    const floorLikeValues = values.filter(v => 
+                        String(v).toLowerCase().includes('floor') ||
+                        String(v).toLowerCase().includes('slab') ||
+                        String(v).toLowerCase().includes('vloer') ||
+                        String(v).toLowerCase().includes('niveau')
+                    );
+                    
+                    if (floorLikeValues.length > 0) {
+                        addDebug(`\n${propName}: ${floorLikeValues.slice(0, 10).join(', ')}`);
                     }
-                });
-                
-                // Toon value samples
-                addDebug('\n\n=== VALUE VOORBEELDEN ===\n');
-                const importantProps = ['name', 'type', 'ifc_type', 'ifcType', 'category', 'description', 'classname', 'className', 'externalId'];
-                importantProps.forEach(prop => {
-                    const values = [...new Set(firstObj.objects.map(o => o[prop]).filter(v => v))];
-                    if (values.length > 0) {
-                        addDebug(`${prop}: ${values.slice(0, 5).join(', ')}${values.length > 5 ? '...' : ''}`);
-                    }
-                });
+                }
                 
             } catch (error) {
                 addDebug(`✗ FOUT: ${error.message}`);
