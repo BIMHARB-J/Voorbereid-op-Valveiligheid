@@ -108,13 +108,13 @@
         <h1>Trimble Connect IFC Viewer - Vloerranden Highlighter</h1>
         
         <div class="instruction">
-            <strong>Instructie:</strong> Klik op een vloer/slab element in de 3D viewer, dan detecteren we het type en highlighten we alle vergelijkbare elementen!
+            <strong>Instructie:</strong> Klik op "Highlighten SLAB & ROOF" om alle vloer- en dakelementen te markeren!
         </div>
         
         <div class="controls">
-            <button onclick="detectAndHighlight()">🎯 Detecteer & Highlighten</button>
+            <button onclick="highlightSlabsAndRoofs()">🎯 Highlighten SLAB & ROOF</button>
             <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="danger" onclick="isolateSelected()">🔍 Isoleer Gedetecteerde</button>
+            <button class="danger" onclick="isolateSelected()">🔍 Isoleer Gemarkeerde</button>
         </div>
         
         <div id="result" class="result">
@@ -129,17 +129,16 @@
     
     <script>
         let highlightedFloors = [];
-        let detectedType = null;
         
-        // Detecteer geselecteerde element en highlighten alle van dat type
-        async function detectAndHighlight() {
+        // Highlighten SLAB en ROOF elementen
+        async function highlightSlabsAndRoofs() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
             
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Wachten op je selectie... Klik op een element in de 3D viewer!';
+                messageDiv.textContent = 'SLAB en ROOF elementen zoeken...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
@@ -148,44 +147,66 @@
                     }
                 );
                 
-                // Wacht op selection verandering (max 30 seconden)
-                const selectionPromise = waitForSelection(API);
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout - geen element geselecteerd')), 30000)
-                );
-                
-                const selectedIds = await Promise.race([selectionPromise, timeoutPromise]);
-                
-                if (!selectedIds || selectedIds.length === 0) {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen element geselecteerd';
-                    return;
-                }
-                
-                messageDiv.className = 'loading';
-                messageDiv.textContent = `Element geselecteerd (ID: ${selectedIds[0]}). Analyseren...`;
-                
-                // Nu hebben we een geselecteerd element
-                // We gaan aannemen dat dit een slab/vloer is
-                // En we highlighten alle objecten van vergelijkbare grootte
-                
+                // Haal alle objecten op
                 const allObjects = await API.viewer.getObjects();
                 const allIds = allObjects[0].objects.map(o => o.id);
                 
-                // Voor nu: highlighten we alle objecten
-                // (omdat we de IFC type niet kunnen detecteren)
-                highlightedFloors = allIds.map((id, idx) => ({
-                    id: id,
-                    name: `Element ${id}`
-                }));
+                messageDiv.textContent = 'IFC types ophalen...';
                 
-                // Selecteer alle
-                await API.viewer.setSelection(allIds);
+                // Voor elk object, controleer de IFC type
+                const slabsAndRoofs = [];
+                let checked = 0;
+                
+                for (const objId of allIds) {
+                    try {
+                        // Selecteer object om properties te zien
+                        await API.viewer.setSelection([objId]);
+                        
+                        // Haal entity info op
+                        const entities = await API.viewer.getEntities([objId]);
+                        
+                        if (entities && entities.length > 0) {
+                            const entity = entities[0];
+                            const entityType = entity.commonType || entity.type || '';
+                            
+                            // Filter op SLAB en ROOF
+                            if (entityType.toUpperCase() === 'SLAB' || entityType.toUpperCase() === 'ROOF') {
+                                slabsAndRoofs.push({
+                                    id: objId,
+                                    name: entity.name || `${entityType} ${objId}`,
+                                    type: entityType
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`Kon object ${objId} niet controleren`);
+                    }
+                    
+                    checked++;
+                    if (checked % 100 === 0) {
+                        messageDiv.textContent = `IFC types ophalen... (${checked}/${allIds.length})`;
+                    }
+                }
+                
+                if (slabsAndRoofs.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen SLAB of ROOF elementen gevonden';
+                    return;
+                }
+                
+                messageDiv.textContent = `${slabsAndRoofs.length} elementen gevonden, highlighten...`;
+                
+                // Selecteer alle slabs en roofs
+                const selectedIds = slabsAndRoofs.map(s => s.id);
+                await API.viewer.setSelection(selectedIds);
+                
+                highlightedFloors = slabsAndRoofs;
                 
                 messageDiv.className = 'success';
                 messageDiv.innerHTML = `
-                    <strong>✓ Geselecteerde element: ID ${selectedIds[0]}</strong><br>
-                    <small>Alle ${allIds.length} elementen zijn geselecteerd. (Opmerking: we kunnen het IFC type nog niet filteren)</small>
+                    <strong>✓ ${slabsAndRoofs.length} SLAB/ROOF elementen gemarkeerd!</strong><br>
+                    <small>${slabsAndRoofs.filter(s => s.type.toUpperCase() === 'SLAB').length} Slabs | 
+                    ${slabsAndRoofs.filter(s => s.type.toUpperCase() === 'ROOF').length} Roofs</small>
                 `;
                 
                 displayFloorList();
@@ -196,23 +217,6 @@
                 messageDiv.textContent = `Fout: ${error.message}`;
                 console.error('Error:', error);
             }
-        }
-        
-        // Wacht op selection verandering
-        async function waitForSelection(API) {
-            return new Promise((resolve) => {
-                const checkInterval = setInterval(async () => {
-                    try {
-                        const currentSelection = await API.viewer.getSelection();
-                        if (currentSelection && currentSelection.length > 0) {
-                            clearInterval(checkInterval);
-                            resolve(currentSelection);
-                        }
-                    } catch (e) {
-                        console.log('Checking selection...');
-                    }
-                }, 500);
-            });
         }
         
         // Reset highlight
@@ -236,7 +240,6 @@
                 await API.viewer.setSelection([]);
                 
                 highlightedFloors = [];
-                detectedType = null;
                 document.getElementById('floorEdgesList').innerHTML = '';
                 
                 messageDiv.className = 'success';
@@ -261,7 +264,7 @@
                 
                 if (highlightedFloors.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen elementen geselecteerd. Klik eerst op "Detecteer & Highlighten"';
+                    messageDiv.textContent = 'Geen elementen gemarkeerd. Klik eerst op "Highlighten SLAB & ROOF"';
                     return;
                 }
                 
@@ -294,18 +297,18 @@
                 return;
             }
             
-            let html = `<h3>Geselecteerde Elementen (${slabs.length}):</h3>`;
-            slabs.slice(0, 20).forEach(item => {
+            let html = `<h3>Gemarkeerde Elementen (${slabs.length}):</h3>`;
+            slabs.slice(0, 30).forEach(item => {
                 html += `
                     <div class="floor-item highlighted">
                         <strong>${item.name}</strong>
-                        <small>(ID: ${item.id})</small>
+                        <small>(Type: ${item.type} | ID: ${item.id})</small>
                     </div>
                 `;
             });
             
-            if (slabs.length > 20) {
-                html += `<div style="padding: 10px; text-align: center; color: #666;">... en ${slabs.length - 20} meer</div>`;
+            if (slabs.length > 30) {
+                html += `<div style="padding: 10px; text-align: center; color: #666;">... en ${slabs.length - 30} meer</div>`;
             }
             
             listDiv.innerHTML = html;
