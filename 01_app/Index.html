@@ -104,7 +104,7 @@
         <h1>Trimble Connect IFC Viewer - Vloerranden Highlighter</h1>
         
         <div class="instruction">
-            <strong>Instructie:</strong> Klik op "Highlighten SLAB & ROOF" om alle vloer- en dakelementen snel te markeren via DataTable!
+            <strong>Instructie:</strong> Klik op "Highlighten SLAB & ROOF" om alle vloer- en dakelementen snel te markeren!
         </div>
         
         <div class="controls">
@@ -126,7 +126,7 @@
     <script>
         let highlightedFloors = [];
         
-        // Highlighten SLAB en ROOF elementen via DataTable
+        // Highlighten SLAB en ROOF elementen
         async function highlightSlabsAndRoofs() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
@@ -134,7 +134,7 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Stap 1/6: Verbinding maken...';
+                messageDiv.textContent = 'SLAB en ROOF elementen zoeken...';
                 console.log('=== START highlightSlabsAndRoofs ===');
                 
                 const API = await TrimbleConnectWorkspace.connect(
@@ -144,88 +144,97 @@
                     }
                 );
                 
-                console.log('API verbonden:', API);
-                messageDiv.textContent = 'Stap 2/6: DataTable config ophalen...';
+                console.log('API verbonden');
                 
-                // Get DataTable config
-                const config = await API.dataTable.getConfig();
-                console.log('DataTable config:', config);
-                
-                messageDiv.textContent = 'Stap 3/6: Alle columns ophalen...';
-                
-                // Haal alle columns op
-                const allColumns = await API.dataTable.getAllColumns();
-                console.log('Alle columns:', allColumns);
-                console.log('Column names:', allColumns.map(c => c.name));
-                
-                // Zoek naar Common Type column
-                const commonTypeColumn = allColumns.find(col => 
-                    col.name.toLowerCase().includes('common type') ||
-                    col.name.toLowerCase().includes('commontype') ||
-                    col.name === 'Common Type'
-                );
-                
-                if (!commonTypeColumn) {
-                    messageDiv.className = 'error';
-                    messageDiv.innerHTML = `
-                        <strong>Common Type column niet gevonden!</strong><br>
-                        <small>Beschikbare columns: ${allColumns.map(c => c.name).join(', ')}</small>
-                    `;
-                    console.log('ERROR: Common Type column niet gevonden');
-                    return;
-                }
-                
-                console.log('Common Type column:', commonTypeColumn);
-                messageDiv.textContent = `Stap 4/6: Filter toepassen op ${commonTypeColumn.name}...`;
-                
-                // Maak filter config
-                const newConfig = {
-                    ...config,
-                    filters: [
-                        {
-                            column: commonTypeColumn.id || commonTypeColumn.name,
-                            operator: 'in',
-                            value: ['SLAB', 'ROOF']
-                        }
-                    ]
-                };
-                
-                console.log('New config:', newConfig);
-                
-                // Apply filter
-                await API.dataTable.setConfig(newConfig);
-                console.log('Filter applied');
-                
-                messageDiv.textContent = 'Stap 5/6: Gefilterde elementen ophalen...';
-                
-                // Haal alle objecten op (nu gefilterd)
+                // Haal alle objecten op
+                messageDiv.textContent = 'Alle elementen ophalen...';
                 const allObjects = await API.viewer.getObjects();
-                console.log('All objects after filter:', allObjects);
+                const allIds = allObjects[0].objects.map(o => o.id);
                 
-                const filteredIds = allObjects[0].objects.map(o => o.id);
-                console.log('Filtered IDs:', filteredIds);
+                console.log('Total objects:', allIds.length);
                 
-                if (filteredIds.length === 0) {
+                // Filter op SLAB en ROOF via getEntities
+                messageDiv.textContent = 'IFC types controleren...';
+                
+                const slabsAndRoofs = [];
+                
+                // Check first 100 objects to find SLAB/ROOF pattern
+                const sampleSize = Math.min(100, allIds.length);
+                for (let i = 0; i < sampleSize; i++) {
+                    try {
+                        const entities = await API.viewer.getEntities([allIds[i]]);
+                        if (entities && entities.length > 0) {
+                            const entity = entities[0];
+                            console.log(`Object ${i}: type=${entity.commonType}, name=${entity.name}`);
+                            
+                            if (entity.commonType === 'SLAB' || entity.commonType === 'ROOF') {
+                                slabsAndRoofs.push({
+                                    id: allIds[i],
+                                    name: entity.name || `${entity.commonType} ${allIds[i]}`,
+                                    type: entity.commonType
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`Error checking object ${i}:`, e.message);
+                    }
+                    
+                    if ((i + 1) % 20 === 0) {
+                        messageDiv.textContent = `Gecheckt ${i + 1}/${sampleSize} elementen...`;
+                    }
+                }
+                
+                console.log('Found SLAB/ROOF:', slabsAndRoofs);
+                
+                if (slabsAndRoofs.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen SLAB of ROOF elementen gevonden na filteren';
+                    messageDiv.textContent = 'Geen SLAB of ROOF elementen gevonden in eerste 100 objecten. Probeer alle elementen te checken...';
+                    
+                    // Try all objects
+                    messageDiv.textContent = 'Alle elementen checken (dit kan even duren)...';
+                    for (let i = sampleSize; i < allIds.length; i++) {
+                        try {
+                            const entities = await API.viewer.getEntities([allIds[i]]);
+                            if (entities && entities.length > 0) {
+                                const entity = entities[0];
+                                
+                                if (entity.commonType === 'SLAB' || entity.commonType === 'ROOF') {
+                                    slabsAndRoofs.push({
+                                        id: allIds[i],
+                                        name: entity.name || `${entity.commonType} ${allIds[i]}`,
+                                        type: entity.commonType
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                            // Silent fail
+                        }
+                        
+                        if ((i + 1) % 100 === 0) {
+                            messageDiv.textContent = `Gecheckt ${i + 1}/${allIds.length} elementen...`;
+                        }
+                    }
+                }
+                
+                if (slabsAndRoofs.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen SLAB of ROOF elementen gevonden in het hele model';
                     return;
                 }
                 
-                messageDiv.textContent = `Stap 6/6: ${filteredIds.length} elementen highlighten...`;
+                messageDiv.textContent = `${slabsAndRoofs.length} elementen gevonden, highlighten...`;
                 
-                // Selecteer alle gefilterde elementen
-                await API.viewer.setSelection(filteredIds);
+                // Selecteer alle slabs en roofs
+                const selectedIds = slabsAndRoofs.map(s => s.id);
+                await API.viewer.setSelection(selectedIds);
                 
-                // Maak list van gevonden elementen
-                highlightedFloors = filteredIds.map((id, idx) => ({
-                    id: id,
-                    name: `Element ${id}`
-                }));
+                highlightedFloors = slabsAndRoofs;
                 
                 messageDiv.className = 'success';
                 messageDiv.innerHTML = `
-                    <strong>✓ ${filteredIds.length} SLAB/ROOF elementen gemarkeerd!</strong><br>
-                    <small>Gefilterd via DataTable API (veel sneller)</small>
+                    <strong>✓ ${slabsAndRoofs.length} SLAB/ROOF elementen gemarkeerd!</strong><br>
+                    <small>${slabsAndRoofs.filter(s => s.type === 'SLAB').length} Slabs | 
+                    ${slabsAndRoofs.filter(s => s.type === 'ROOF').length} Roofs</small>
                 `;
                 
                 displayFloorList();
@@ -251,7 +260,7 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Highlight en filter worden gereset...';
+                messageDiv.textContent = 'Highlight wordt gereset...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
@@ -263,16 +272,11 @@
                 // Clear selection
                 await API.viewer.setSelection([]);
                 
-                // Reset filter
-                const config = await API.dataTable.getConfig();
-                config.filters = [];
-                await API.dataTable.setConfig(config);
-                
                 highlightedFloors = [];
                 document.getElementById('floorEdgesList').innerHTML = '';
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = '✓ Highlight en filter zijn gereset';
+                messageDiv.textContent = '✓ Highlight is gereset';
                 
             } catch (error) {
                 messageDiv.className = 'error';
@@ -331,6 +335,7 @@
                 html += `
                     <div class="floor-item highlighted">
                         <strong>${item.name}</strong>
+                        <small>(Type: ${item.type})</small>
                     </div>
                 `;
             });
