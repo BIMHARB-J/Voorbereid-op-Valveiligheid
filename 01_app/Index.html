@@ -108,9 +108,9 @@
         </div>
         
         <div class="controls">
-            <button onclick="highlightSlabsAndRoofs()">🎯 Highlighten SLAB & ROOF</button>
+            <button onclick="highlightSlabsAndRoofs()">Highlighten SLAB & ROOF</button>
             <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="danger" onclick="isolateSelected()">🔍 Isoleer Gemarkeerde</button>
+            <button class="danger" onclick="isolateSelected()">Isoleer Gemarkeerde</button>
         </div>
         
         <div id="result" class="result">
@@ -134,7 +134,7 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'SLAB en ROOF elementen zoeken...';
+                messageDiv.textContent = 'SLAB en ROOF elementen zoeken via properties...';
                 console.log('=== START highlightSlabsAndRoofs ===');
                 
                 const API = await TrimbleConnectWorkspace.connect(
@@ -153,33 +153,41 @@
                 
                 console.log('Total objects:', allIds.length);
                 
-                // Filter op SLAB en ROOF via getEntities
-                messageDiv.textContent = 'IFC types controleren...';
-                
                 const slabsAndRoofs = [];
+                const sampleSize = Math.min(50, allIds.length);
                 
-                // Check first 100 objects to find SLAB/ROOF pattern
-                const sampleSize = Math.min(100, allIds.length);
+                // Check first objects to find properties and SLAB/ROOF
+                messageDiv.textContent = 'Eigenschappen van elementen ophalen...';
+                
                 for (let i = 0; i < sampleSize; i++) {
                     try {
-                        const entities = await API.viewer.getEntities([allIds[i]]);
-                        if (entities && entities.length > 0) {
-                            const entity = entities[0];
-                            console.log(`Object ${i}: type=${entity.commonType}, name=${entity.name}`);
+                        const props = await API.viewer.getObjectProperties(allIds[i]);
+                        
+                        if (props && props.length > 0) {
+                            console.log(`Object ${i} (ID: ${allIds[i]}):`, props);
                             
-                            if (entity.commonType === 'SLAB' || entity.commonType === 'ROOF') {
+                            // Zoek naar Common Type property
+                            const commonTypeProp = props.find(p => 
+                                p.name && (p.name.toLowerCase().includes('common type') || 
+                                          p.name.toLowerCase().includes('type') ||
+                                          p.value === 'SLAB' || 
+                                          p.value === 'ROOF')
+                            );
+                            
+                            if (commonTypeProp && (commonTypeProp.value === 'SLAB' || commonTypeProp.value === 'ROOF')) {
                                 slabsAndRoofs.push({
                                     id: allIds[i],
-                                    name: entity.name || `${entity.commonType} ${allIds[i]}`,
-                                    type: entity.commonType
+                                    name: `${commonTypeProp.value} (ID: ${allIds[i]})`,
+                                    type: commonTypeProp.value
                                 });
+                                console.log(`✓ Found ${commonTypeProp.value} at index ${i}`);
                             }
                         }
                     } catch (e) {
                         console.warn(`Error checking object ${i}:`, e.message);
                     }
                     
-                    if ((i + 1) % 20 === 0) {
+                    if ((i + 1) % 10 === 0) {
                         messageDiv.textContent = `Gecheckt ${i + 1}/${sampleSize} elementen...`;
                     }
                 }
@@ -188,37 +196,21 @@
                 
                 if (slabsAndRoofs.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen SLAB of ROOF elementen gevonden in eerste 100 objecten. Probeer alle elementen te checken...';
+                    messageDiv.innerHTML = `
+                        <strong>Geen SLAB of ROOF elementen gevonden</strong><br>
+                        <small>Mogelijk zijn de properties anders gestructureerd. Check console voor eerste element properties.</small>
+                    `;
                     
-                    // Try all objects
-                    messageDiv.textContent = 'Alle elementen checken (dit kan even duren)...';
-                    for (let i = sampleSize; i < allIds.length; i++) {
-                        try {
-                            const entities = await API.viewer.getEntities([allIds[i]]);
-                            if (entities && entities.length > 0) {
-                                const entity = entities[0];
-                                
-                                if (entity.commonType === 'SLAB' || entity.commonType === 'ROOF') {
-                                    slabsAndRoofs.push({
-                                        id: allIds[i],
-                                        name: entity.name || `${entity.commonType} ${allIds[i]}`,
-                                        type: entity.commonType
-                                    });
-                                }
-                            }
-                        } catch (e) {
-                            // Silent fail
+                    // Debug: log first element properties
+                    try {
+                        const firstProps = await API.viewer.getObjectProperties(allIds[0]);
+                        console.log('First element all properties:', firstProps);
+                        if (firstProps && firstProps.length > 0) {
+                            console.log('Property names:', firstProps.map(p => `${p.name}=${p.value}`).join(', '));
                         }
-                        
-                        if ((i + 1) % 100 === 0) {
-                            messageDiv.textContent = `Gecheckt ${i + 1}/${allIds.length} elementen...`;
-                        }
+                    } catch (e) {
+                        console.log('Could not get first element props');
                     }
-                }
-                
-                if (slabsAndRoofs.length === 0) {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen SLAB of ROOF elementen gevonden in het hele model';
                     return;
                 }
                 
