@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trimble Connect - Object Properties Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        #debug {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 3px;
+            max-height: 700px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            line-height: 1.3;
+        }
+        .object-item {
+            background-color: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .object-item:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trimble Connect - Object Properties Inspector</h1>
+        <button onclick="inspectObjects()">🔍 Inspecteer Alle Object Properties</button>
+        <button onclick="clearDebug()">🗑️ Leeg</button>
+        
+        <div id="debug"></div>
+    </div>
+
+    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+    
+    <script>
+        function addDebug(text) {
+            const debugDiv = document.getElementById('debug');
+            debugDiv.textContent += text + '\n';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+        
+        function clearDebug() {
+            document.getElementById('debug').textContent = '';
+        }
+        
+        async function inspectObjects() {
+            clearDebug();
+            addDebug('=== OBJECT PROPERTIES INSPECTIE ===\n');
+            
+            try {
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                // Haal alle objecten op
+                const allObjects = await API.viewer.getObjects();
+                addDebug(`Totaal objecten: ${allObjects.length}\n`);
+                
+                if (allObjects.length === 0) {
+                    addDebug('Geen objecten gevonden!');
+                    return;
+                }
+                
+                // Toon eerste 10 objecten in detail
+                addDebug('=== EERSTE 10 OBJECTEN ===\n');
+                for (let i = 0; i < Math.min(10, allObjects.length); i++) {
+                    const obj = allObjects[i];
+                    addDebug(`\nObject ${i}:`);
+                    addDebug(`  Alle properties:`);
+                    
+                    // Log alle properties
+                    for (const [key, value] of Object.entries(obj)) {
+                        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                            addDebug(`    ${key}: ${value}`);
+                        } else if (Array.isArray(value)) {
+                            addDebug(`    ${key}: [Array(${value.length})]`);
+                        } else if (typeof value === 'object') {
+                            addDebug(`    ${key}: ${JSON.stringify(value)}`);
+                        }
+                    }
+                }
+                
+                // Analyseer alle properties
+                addDebug('\n\n=== PROPERTY ANALYSE ===\n');
+                const allProperties = new Set();
+                allObjects.forEach(obj => {
+                    Object.keys(obj).forEach(key => allProperties.add(key));
+                });
+                
+                addDebug(`Alle unieke properties: ${Array.from(allProperties).join(', ')}\n`);
+                
+                // Controleer op floor/slab termen
+                addDebug('\n=== ZOEKEN NAAR FLOOR/SLAB TERMEN ===\n');
+                const floorLikeObjects = allObjects.filter(obj => {
+                    const stringified = JSON.stringify(obj).toLowerCase();
+                    return stringified.includes('floor') || 
+                           stringified.includes('slab') || 
+                           stringified.includes('niveau') ||
+                           stringified.includes('verdieping');
+                });
+                
+                addDebug(`Gevonden ${floorLikeObjects.length} objecten met floor/slab termen\n`);
+                
+                floorLikeObjects.slice(0, 5).forEach((obj, i) => {
+                    addDebug(`\nFloor-like object ${i}:`);
+                    for (const [key, value] of Object.entries(obj)) {
+                        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                            addDebug(`  ${key}: ${value}`);
+                        }
+                    }
+                });
+                
+                // Toon value samples van importantes properties
+                addDebug('\n\n=== VALUE VOORBEELDEN ===\n');
+                const importantProps = ['name', 'type', 'ifc_type', 'ifcType', 'category', 'description', 'classname', 'className'];
+                importantProps.forEach(prop => {
+                    const values = [...new Set(allObjects.map(o => o[prop]).filter(v => v))];
+                    if (values.length > 0) {
+                        addDebug(`${prop}: ${values.slice(0, 5).join(', ')}${values.length > 5 ? '...' : ''}`);
+                    }
+                });
+                
+            } catch (error) {
+                addDebug(`✗ FOUT: ${error.message}`);
+                addDebug(`Stack: ${error.stack}`);
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>
