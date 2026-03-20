@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trimble Connect IFC Viewer</title>
+    <title>Trimble Connect IFC Viewer - Floor Edges Highlighter</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -100,14 +100,14 @@
         <h1>Trimble Connect IFC Viewer - Floor Edges Highlighter</h1>
         
         <div class="instruction">
-            <strong>Instructie:</strong> Klik op "Debug PsetDefinitions" om de property structure te zien
+            <strong>Instructie:</strong> Klik op "Highlighten SLAB & ROOF" om alle vloerranden te markeren!
         </div>
         
         <div class="controls">
-            <button class="secondary" onclick="debugPsetDefinitions()">Debug PsetDefinitions</button>
-            <button onclick="highlightSlabsAndRoofs()">Highlighten SLAB & ROOF</button>
+            <button class="secondary" onclick="debugObjectStructure()">🔍 Debug Object Structure</button>
+            <button onclick="highlightSlabsAndRoofs()">🎯 Highlighten SLAB & ROOF</button>
             <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="danger" onclick="isolateSelected()">Isoleer</button>
+            <button class="danger" onclick="isolateSelected()">🔍 Isoleer</button>
         </div>
         
         <div id="result" class="result">
@@ -122,36 +122,33 @@
     <script>
         let highlightedFloors = [];
         
-        // Debug PsetDefinitions
-        async function debugPsetDefinitions() {
+        // Debug object structure
+        async function debugObjectStructure() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
             
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'PsetDefinitions analyseren...';
+                messageDiv.textContent = 'Object structure analyseren...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
                     (event, data) => {}
                 );
                 
-                const psetDefs = await API.viewer.getPsetDefinitions();
-                console.log('=== PSET DEFINITIONS ===');
-                console.log('Count:', psetDefs.length);
-                console.log('Full data:', JSON.stringify(psetDefs, null, 2));
+                const allObjects = await API.viewer.getObjects();
+                console.log('=== OBJECT STRUCTURE ===');
+                console.log('Top level:', allObjects);
+                console.log('Objects array:', allObjects[0].objects.slice(0, 3));
                 
-                psetDefs.forEach((pset, idx) => {
-                    console.log(`\n--- PsetDefinition ${idx} ---`);
-                    console.log('Keys:', Object.keys(pset));
-                    for (const [key, value] of Object.entries(pset)) {
-                        console.log(`${key}:`, value);
-                    }
-                });
+                // Log first object in detail
+                const firstObj = allObjects[0].objects[0];
+                console.log('\n=== First Object Detail ===');
+                console.log('Full object:', JSON.stringify(firstObj, null, 2));
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = '✓ PsetDefinitions gelogd in console (F12)';
+                messageDiv.textContent = '✓ Object structure gelogd (F12)';
                 
             } catch (error) {
                 messageDiv.className = 'error';
@@ -168,79 +165,62 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Stap 1: PsetDefinitions ophalen...';
+                messageDiv.textContent = 'SLAB en ROOF elementen zoeken...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
                     (event, data) => {}
                 );
                 
-                // Haal PsetDefinitions op
-                const psetDefs = await API.viewer.getPsetDefinitions();
-                console.log('PsetDefinitions:', psetDefs);
-                
-                if (!psetDefs || psetDefs.length === 0) {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen PsetDefinitions gevonden';
-                    return;
-                }
-                
-                // Zoek naar Common Type property
-                const commonTypeDef = psetDefs.find(p => {
-                    const str = JSON.stringify(p).toLowerCase();
-                    return str.includes('common type') || str.includes('commontype');
-                });
-                
-                console.log('Common Type Pset:', commonTypeDef);
-                
-                messageDiv.textContent = 'Stap 2: Alle objecten ophalen...';
-                
+                // Haal alle objecten op
                 const allObjects = await API.viewer.getObjects();
-                const allIds = allObjects[0].objects.map(o => o.id);
+                const objects = allObjects[0].objects;
                 
-                console.log('Total objects:', allIds.length);
-                
-                messageDiv.textContent = 'Stap 3: SLAB/ROOF elementen scannen...';
+                console.log('Total objects:', objects.length);
                 
                 const slabsAndRoofs = [];
                 
-                // Scan alle elementen
-                for (let i = 0; i < allIds.length; i++) {
-                    try {
-                        // Selecteer element om properties te laden
-                        await API.viewer.setSelection([allIds[i]]);
-                        
-                        // Probeer properties via showModelDetails (dit laadt de properties panel)
-                        await API.viewer.showModelDetails([allIds[i]]);
-                        
-                        // Haal nu properties op
-                        const props = await API.viewer.getObjectProperties(allIds[i]);
-                        
-                        if (props && props.length > 0) {
-                            // Zoek naar SLAB of ROOF
-                            const isSlabOrRoof = props.some(p => 
-                                p.value === 'SLAB' || p.value === 'ROOF'
-                            );
-                            
-                            if (isSlabOrRoof) {
-                                const typeProp = props.find(p => p.value === 'SLAB' || p.value === 'ROOF');
-                                slabsAndRoofs.push({
-                                    id: allIds[i],
-                                    name: `${typeProp.value} ${allIds[i]}`,
-                                    type: typeProp.value
-                                });
-                                
-                                if (slabsAndRoofs.length % 10 === 0) {
-                                    console.log(`Found ${slabsAndRoofs.length} SLAB/ROOF elements`);
+                // Scan alle objecten
+                messageDiv.textContent = 'Scanning 0/0 elementen...';
+                
+                for (let i = 0; i < objects.length; i++) {
+                    const obj = objects[i];
+                    
+                    // Check of object properties heeft
+                    if (obj.properties && Array.isArray(obj.properties)) {
+                        // Zoek naar "Common Type" property met waarde SLAB of ROOF
+                        const commonTypeProp = obj.properties.find(pset => {
+                            if (pset.properties && Array.isArray(pset.properties)) {
+                                const commonType = pset.properties.find(prop => 
+                                    prop.name === 'Common Type' || 
+                                    prop.name === 'CommonType'
+                                );
+                                if (commonType) {
+                                    return commonType.value === 'SLAB' || commonType.value === 'ROOF';
                                 }
                             }
+                            return false;
+                        });
+                        
+                        if (commonTypeProp) {
+                            // Find the actual type value
+                            const typeValue = commonTypeProp.properties.find(p => 
+                                p.name === 'Common Type' || p.name === 'CommonType'
+                            )?.value;
+                            
+                            slabsAndRoofs.push({
+                                id: obj.id,
+                                name: obj.product?.name || `${typeValue} ${obj.id}`,
+                                type: typeValue,
+                                class: obj.class
+                            });
+                            
+                            console.log(`✓ Found ${typeValue}: ${obj.product?.name || obj.id}`);
                         }
-                    } catch (e) {
-                        // Silent fail
                     }
                     
                     if ((i + 1) % 500 === 0) {
-                        messageDiv.textContent = `Gecheckt ${i + 1}/${allIds.length} elementen... (${slabsAndRoofs.length} gevonden)`;
+                        messageDiv.textContent = `Scanning ${i + 1}/${objects.length} elementen... (${slabsAndRoofs.length} gevonden)`;
                     }
                 }
                 
@@ -248,12 +228,16 @@
                 
                 if (slabsAndRoofs.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen SLAB/ROOF elementen gevonden';
+                    messageDiv.innerHTML = `
+                        <strong>Geen SLAB/ROOF elementen gevonden</strong><br>
+                        <small>Klik Debug voor meer info</small>
+                    `;
                     return;
                 }
                 
-                messageDiv.textContent = `Stap 4: ${slabsAndRoofs.length} elementen selecteren...`;
+                messageDiv.textContent = `${slabsAndRoofs.length} elementen gevonden, selecteren...`;
                 
+                // Selecteer alle
                 const selectedIds = slabsAndRoofs.map(s => s.id);
                 await API.viewer.setSelection(selectedIds);
                 
@@ -346,12 +330,17 @@
             }
             
             let html = `<h3>Gemarkeerde (${slabs.length}):</h3>`;
-            slabs.slice(0, 30).forEach(item => {
-                html += `<div class="floor-item highlighted"><strong>${item.name}</strong></div>`;
+            slabs.slice(0, 50).forEach(item => {
+                html += `
+                    <div class="floor-item highlighted">
+                        <strong>${item.name}</strong>
+                        <small>${item.type}</small>
+                    </div>
+                `;
             });
             
-            if (slabs.length > 30) {
-                html += `<div style="padding: 10px; text-align: center;">... en ${slabs.length - 30} meer</div>`;
+            if (slabs.length > 50) {
+                html += `<div style="padding: 10px;">... en ${slabs.length - 50} meer</div>`;
             }
             
             listDiv.innerHTML = html;
