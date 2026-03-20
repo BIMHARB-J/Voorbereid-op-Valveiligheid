@@ -104,13 +104,14 @@
         <h1>Trimble Connect IFC Viewer - Vloerranden Highlighter</h1>
         
         <div class="instruction">
-            <strong>Instructie:</strong> Klik op "Highlighten SLAB & ROOF" om alle vloer- en dakelementen snel te markeren!
+            <strong>Instructie:</strong> Klik op "Debug Mode" eerst om de property structuur te zien, dan "Highlighten SLAB & ROOF"!
         </div>
         
         <div class="controls">
-            <button onclick="highlightSlabsAndRoofs()">Highlighten SLAB & ROOF</button>
+            <button class="secondary" onclick="debugProperties()">🔍 Debug Mode - Zie Properties</button>
+            <button onclick="highlightSlabsAndRoofs()">🎯 Highlighten SLAB & ROOF</button>
             <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="danger" onclick="isolateSelected()">Isoleer Gemarkeerde</button>
+            <button class="danger" onclick="isolateSelected()">🔍 Isoleer Gemarkeerde</button>
         </div>
         
         <div id="result" class="result">
@@ -126,6 +127,74 @@
     <script>
         let highlightedFloors = [];
         
+        // Debug: zie wat getPsetDefinitions geeft
+        async function debugProperties() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Debug mode: Properties ophalen...';
+                
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                // Haal alle objecten op
+                const allObjects = await API.viewer.getObjects();
+                const allIds = allObjects[0].objects.map(o => o.id);
+                
+                console.log('=== DEBUG MODE ===');
+                console.log('Total objects:', allIds.length);
+                
+                // Probeer getPsetDefinitions
+                console.log('Trying getPsetDefinitions...');
+                const psetDefs = await API.viewer.getPsetDefinitions();
+                console.log('PsetDefinitions:', psetDefs);
+                
+                // Try first few objects
+                for (let i = 0; i < Math.min(3, allIds.length); i++) {
+                    console.log(`\n=== Object ${i} (ID: ${allIds[i]}) ===`);
+                    
+                    // Try different API calls
+                    try {
+                        const props = await API.viewer.getObjectProperties(allIds[i]);
+                        console.log('getObjectProperties:', props);
+                    } catch (e) {
+                        console.log('getObjectProperties error:', e.message);
+                    }
+                    
+                    // Try getHierarchyParents
+                    try {
+                        const parents = await API.viewer.getHierarchyParents([allIds[i]]);
+                        console.log('getHierarchyParents:', parents);
+                    } catch (e) {
+                        console.log('getHierarchyParents error:', e.message);
+                    }
+                    
+                    // Try getHierarchyChildren
+                    try {
+                        const children = await API.viewer.getHierarchyChildren([allIds[i]]);
+                        console.log('getHierarchyChildren:', children);
+                    } catch (e) {
+                        console.log('getHierarchyChildren error:', e.message);
+                    }
+                }
+                
+                messageDiv.className = 'success';
+                messageDiv.textContent = 'Debug info gelogd in console (F12)';
+                
+            } catch (error) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Error: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
         // Highlighten SLAB en ROOF elementen
         async function highlightSlabsAndRoofs() {
             const resultDiv = document.getElementById('result');
@@ -134,7 +203,7 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'SLAB en ROOF elementen zoeken via properties...';
+                messageDiv.textContent = 'SLAB en ROOF elementen zoeken...';
                 console.log('=== START highlightSlabsAndRoofs ===');
                 
                 const API = await TrimbleConnectWorkspace.connect(
@@ -144,79 +213,57 @@
                     }
                 );
                 
-                console.log('API verbonden');
-                
                 // Haal alle objecten op
-                messageDiv.textContent = 'Alle elementen ophalen...';
                 const allObjects = await API.viewer.getObjects();
                 const allIds = allObjects[0].objects.map(o => o.id);
                 
                 console.log('Total objects:', allIds.length);
                 
+                // Try via hierarchy (parent-child relationships)
+                messageDiv.textContent = 'Elementen indelen via hierarchy...';
+                
                 const slabsAndRoofs = [];
-                const sampleSize = Math.min(50, allIds.length);
                 
-                // Check first objects to find properties and SLAB/ROOF
-                messageDiv.textContent = 'Eigenschappen van elementen ophalen...';
-                
-                for (let i = 0; i < sampleSize; i++) {
+                for (let i = 0; i < Math.min(200, allIds.length); i++) {
                     try {
-                        const props = await API.viewer.getObjectProperties(allIds[i]);
+                        const parents = await API.viewer.getHierarchyParents([allIds[i]]);
                         
-                        if (props && props.length > 0) {
-                            console.log(`Object ${i} (ID: ${allIds[i]}):`, props);
+                        if (parents && parents.length > 0) {
+                            // Check parent names for SLAB/ROOF
+                            const parentInfo = JSON.stringify(parents).toUpperCase();
                             
-                            // Zoek naar Common Type property
-                            const commonTypeProp = props.find(p => 
-                                p.name && (p.name.toLowerCase().includes('common type') || 
-                                          p.name.toLowerCase().includes('type') ||
-                                          p.value === 'SLAB' || 
-                                          p.value === 'ROOF')
-                            );
-                            
-                            if (commonTypeProp && (commonTypeProp.value === 'SLAB' || commonTypeProp.value === 'ROOF')) {
+                            if (parentInfo.includes('SLAB') || parentInfo.includes('ROOF')) {
                                 slabsAndRoofs.push({
                                     id: allIds[i],
-                                    name: `${commonTypeProp.value} (ID: ${allIds[i]})`,
-                                    type: commonTypeProp.value
+                                    name: `Element ${allIds[i]}`,
+                                    type: parentInfo.includes('SLAB') ? 'SLAB' : 'ROOF'
                                 });
-                                console.log(`✓ Found ${commonTypeProp.value} at index ${i}`);
+                                console.log(`✓ Found ${parentInfo.includes('SLAB') ? 'SLAB' : 'ROOF'}`);
                             }
                         }
                     } catch (e) {
-                        console.warn(`Error checking object ${i}:`, e.message);
+                        // Silent
                     }
                     
-                    if ((i + 1) % 10 === 0) {
-                        messageDiv.textContent = `Gecheckt ${i + 1}/${sampleSize} elementen...`;
+                    if ((i + 1) % 50 === 0) {
+                        messageDiv.textContent = `Gecheckt ${i + 1}/200 elementen...`;
                     }
                 }
                 
-                console.log('Found SLAB/ROOF:', slabsAndRoofs);
+                console.log('Found via hierarchy:', slabsAndRoofs);
                 
                 if (slabsAndRoofs.length === 0) {
                     messageDiv.className = 'error';
                     messageDiv.innerHTML = `
-                        <strong>Geen SLAB of ROOF elementen gevonden</strong><br>
-                        <small>Mogelijk zijn de properties anders gestructureerd. Check console voor eerste element properties.</small>
+                        <strong>Geen SLAB/ROOF gevonden via hierarchy</strong><br>
+                        <small>Probeer Debug Mode knop eerst om te zien hoe properties gestructureerd zijn</small>
                     `;
-                    
-                    // Debug: log first element properties
-                    try {
-                        const firstProps = await API.viewer.getObjectProperties(allIds[0]);
-                        console.log('First element all properties:', firstProps);
-                        if (firstProps && firstProps.length > 0) {
-                            console.log('Property names:', firstProps.map(p => `${p.name}=${p.value}`).join(', '));
-                        }
-                    } catch (e) {
-                        console.log('Could not get first element props');
-                    }
                     return;
                 }
                 
                 messageDiv.textContent = `${slabsAndRoofs.length} elementen gevonden, highlighten...`;
                 
-                // Selecteer alle slabs en roofs
+                // Selecteer alle
                 const selectedIds = slabsAndRoofs.map(s => s.id);
                 await API.viewer.setSelection(selectedIds);
                 
@@ -224,23 +271,16 @@
                 
                 messageDiv.className = 'success';
                 messageDiv.innerHTML = `
-                    <strong>✓ ${slabsAndRoofs.length} SLAB/ROOF elementen gemarkeerd!</strong><br>
-                    <small>${slabsAndRoofs.filter(s => s.type === 'SLAB').length} Slabs | 
-                    ${slabsAndRoofs.filter(s => s.type === 'ROOF').length} Roofs</small>
+                    <strong>✓ ${slabsAndRoofs.length} elementen gemarkeerd!</strong>
                 `;
                 
                 displayFloorList();
-                console.log('=== COMPLETE ===');
                 
             } catch (error) {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'error';
-                messageDiv.innerHTML = `
-                    <strong>Fout:</strong> ${error.message}<br>
-                    <small>Check de browser console voor meer details</small>
-                `;
-                console.error('FULL ERROR:', error);
-                console.error('Stack:', error.stack);
+                messageDiv.textContent = `Error: ${error.message}`;
+                console.error('Error:', error);
             }
         }
         
@@ -256,14 +296,10 @@
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                    }
+                    (event, data) => {}
                 );
                 
-                // Clear selection
                 await API.viewer.setSelection([]);
-                
                 highlightedFloors = [];
                 document.getElementById('floorEdgesList').innerHTML = '';
                 
@@ -272,8 +308,7 @@
                 
             } catch (error) {
                 messageDiv.className = 'error';
-                messageDiv.textContent = `Fout bij reset: ${error.message}`;
-                console.error('Error:', error);
+                messageDiv.textContent = `Error: ${error.message}`;
             }
         }
         
@@ -289,27 +324,24 @@
                 
                 if (highlightedFloors.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen elementen gemarkeerd. Klik eerst op "Highlighten SLAB & ROOF"';
+                    messageDiv.textContent = 'Geen elementen gemarkeerd';
                     return;
                 }
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                    }
+                    (event, data) => {}
                 );
                 
                 const ids = highlightedFloors.map(f => f.id);
                 await API.viewer.isolateEntities(ids);
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = `✓ ${ids.length} elementen zijn geïsoleerd`;
+                messageDiv.textContent = `✓ ${ids.length} elementen geïsoleerd`;
                 
             } catch (error) {
                 messageDiv.className = 'error';
-                messageDiv.textContent = `Fout: ${error.message}`;
-                console.error('Error:', error);
+                messageDiv.textContent = `Error: ${error.message}`;
             }
         }
         
@@ -327,13 +359,12 @@
                 html += `
                     <div class="floor-item highlighted">
                         <strong>${item.name}</strong>
-                        <small>(Type: ${item.type})</small>
                     </div>
                 `;
             });
             
             if (slabs.length > 30) {
-                html += `<div style="padding: 10px; text-align: center; color: #666;">... en ${slabs.length - 30} meer</div>`;
+                html += `<div style="padding: 10px; text-align: center;">... en ${slabs.length - 30} meer</div>`;
             }
             
             listDiv.innerHTML = html;
