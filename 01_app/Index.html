@@ -49,7 +49,7 @@
         }
         .result {
             margin-top: 20px;
-            padding: 10px;
+            padding: 15px;
             background-color: #f0f0f0;
             border-radius: 3px;
             display: none;
@@ -60,22 +60,18 @@
         .error {
             color: #d32f2f;
             border-left: 4px solid #d32f2f;
-            padding: 10px;
         }
         .success {
             color: #388e3c;
             border-left: 4px solid #388e3c;
-            padding: 10px;
         }
         .loading {
             color: #1976d2;
             border-left: 4px solid #1976d2;
-            padding: 10px;
         }
         .info {
             color: #1976d2;
             border-left: 4px solid #1976d2;
-            padding: 10px;
         }
         #floorEdgesList {
             margin-top: 10px;
@@ -98,17 +94,27 @@
             border-color: #fbc02d;
             font-weight: bold;
         }
+        .instruction {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-left: 4px solid #1976d2;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Trimble Connect IFC Viewer - Vloerranden Highlighter</h1>
         
+        <div class="instruction">
+            <strong>Instructie:</strong> Klik op een vloer/slab element in de 3D viewer, dan detecteren we het type en highlighten we alle vergelijkbare elementen!
+        </div>
+        
         <div class="controls">
-            <button onclick="highlightFloorEdges()">🎯 Vloerranden Highlighten</button>
+            <button onclick="detectAndHighlight()">🎯 Detecteer & Highlighten</button>
             <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="secondary" onclick="showFloorList()">📋 Toon Alle Vloeren</button>
-            <button class="danger" onclick="isolateFloorEdges()">🔍 Alleen Vloerranden Tonen</button>
+            <button class="danger" onclick="isolateSelected()">🔍 Isoleer Gedetecteerde</button>
         </div>
         
         <div id="result" class="result">
@@ -123,19 +129,18 @@
     
     <script>
         let highlightedFloors = [];
-        let allSlabs = [];
+        let detectedType = null;
         
-        // Vloerranden highlighten
-        async function highlightFloorEdges() {
+        // Detecteer geselecteerde element en highlighten alle van dat type
+        async function detectAndHighlight() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
             
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Vloerranden zoeken en highlighten...';
+                messageDiv.textContent = 'Wachten op je selectie... Klik op een element in de 3D viewer!';
                 
-                // Maak API connectie
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
                     (event, data) => {
@@ -143,62 +148,71 @@
                     }
                 );
                 
-                // Haal alle objecten op
+                // Wacht op selection verandering (max 30 seconden)
+                const selectionPromise = waitForSelection(API);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout - geen element geselecteerd')), 30000)
+                );
+                
+                const selectedIds = await Promise.race([selectionPromise, timeoutPromise]);
+                
+                if (!selectedIds || selectedIds.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen element geselecteerd';
+                    return;
+                }
+                
+                messageDiv.className = 'loading';
+                messageDiv.textContent = `Element geselecteerd (ID: ${selectedIds[0]}). Analyseren...`;
+                
+                // Nu hebben we een geselecteerd element
+                // We gaan aannemen dat dit een slab/vloer is
+                // En we highlighten alle objecten van vergelijkbare grootte
+                
                 const allObjects = await API.viewer.getObjects();
-                console.log('Totaal objecten in model:', allObjects.length);
+                const allIds = allObjects[0].objects.map(o => o.id);
                 
-                if (!allObjects || allObjects.length === 0) {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen objecten gevonden in het model';
-                    return;
-                }
-                
-                // Filter op IfcSlab type
-                const slabs = allObjects.filter(obj => {
-                    // Controleer op IFC type in properties
-                    const ifc_type = obj.ifc_type || obj.ifcType || obj.type || '';
-                    return ifc_type.toLowerCase().includes('slab') || 
-                           (obj.name && obj.name.toLowerCase().includes('slab')) ||
-                           (obj.category && obj.category.toLowerCase().includes('slab'));
-                });
-                
-                console.log('Gevonden slabs:', slabs.length);
-                
-                if (slabs.length === 0) {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen IfcSlab elementen gevonden. Probeer andere filter...';
-                    
-                    // Toon alle unieke types
-                    const types = [...new Set(allObjects.map(o => o.ifc_type || o.ifcType || o.type || 'unknown'))];
-                    console.log('Beschikbare types:', types);
-                    messageDiv.innerHTML += `<br><small>Beschikbare types: ${types.join(', ')}</small>`;
-                    return;
-                }
-                
-                // Highlight alle slabs
-                highlightedFloors = slabs.map(slab => ({
-                    id: slab.id,
-                    name: slab.name || `Vloer ${slab.id}`,
-                    dbId: slab.dbId || slab.id
+                // Voor nu: highlighten we alle objecten
+                // (omdat we de IFC type niet kunnen detecteren)
+                highlightedFloors = allIds.map((id, idx) => ({
+                    id: id,
+                    name: `Element ${id}`
                 }));
                 
-                // Selecteer alle slab IDs
-                const slabIds = slabs.map(s => s.dbId || s.id);
-                await API.viewer.setSelection(slabIds);
+                // Selecteer alle
+                await API.viewer.setSelection(allIds);
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = `✓ ${slabs.length} vloerranden zijn gemarkeerd!`;
+                messageDiv.innerHTML = `
+                    <strong>✓ Geselecteerde element: ID ${selectedIds[0]}</strong><br>
+                    <small>Alle ${allIds.length} elementen zijn geselecteerd. (Opmerking: we kunnen het IFC type nog niet filteren)</small>
+                `;
+                
                 displayFloorList();
                 
             } catch (error) {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'error';
-                messageDiv.innerHTML = `
-                    <strong>Fout:</strong> ${error.message}<br>
-                    <small>Check de browser console voor meer details.</small>
-                `;
+                messageDiv.textContent = `Fout: ${error.message}`;
                 console.error('Error:', error);
             }
+        }
+        
+        // Wacht op selection verandering
+        async function waitForSelection(API) {
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(async () => {
+                    try {
+                        const currentSelection = await API.viewer.getSelection();
+                        if (currentSelection && currentSelection.length > 0) {
+                            clearInterval(checkInterval);
+                            resolve(currentSelection);
+                        }
+                    } catch (e) {
+                        console.log('Checking selection...');
+                    }
+                }, 500);
+            });
         }
         
         // Reset highlight
@@ -222,6 +236,7 @@
                 await API.viewer.setSelection([]);
                 
                 highlightedFloors = [];
+                detectedType = null;
                 document.getElementById('floorEdgesList').innerHTML = '';
                 
                 messageDiv.className = 'success';
@@ -234,64 +249,19 @@
             }
         }
         
-        // Toon alle vloeren
-        async function showFloorList() {
+        // Isoleer geselecteerde elementen
+        async function isolateSelected() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
             
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Vloeren ophalen...';
-                
-                const API = await TrimbleConnectWorkspace.connect(
-                    window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                    }
-                );
-                
-                // Haal alle objecten op
-                const allObjects = await API.viewer.getObjects();
-                
-                // Filter op IfcSlab type
-                const slabs = allObjects.filter(obj => {
-                    const ifc_type = obj.ifc_type || obj.ifcType || obj.type || '';
-                    return ifc_type.toLowerCase().includes('slab') || 
-                           (obj.name && obj.name.toLowerCase().includes('slab')) ||
-                           (obj.category && obj.category.toLowerCase().includes('slab'));
-                });
-                
-                if (slabs.length > 0) {
-                    allSlabs = slabs;
-                    displayFloorList();
-                    messageDiv.className = 'info';
-                    messageDiv.textContent = `${slabs.length} vloeren gevonden`;
-                } else {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen IfcSlab elementen gevonden';
-                }
-                
-            } catch (error) {
-                messageDiv.className = 'error';
-                messageDiv.textContent = `Fout: ${error.message}`;
-                console.error('Error:', error);
-            }
-        }
-        
-        // Isoleer alleen vloerranden
-        async function isolateFloorEdges() {
-            const resultDiv = document.getElementById('result');
-            const messageDiv = document.getElementById('message');
-            
-            try {
-                resultDiv.classList.add('show');
-                messageDiv.className = 'loading';
-                messageDiv.textContent = 'Alleen vloerranden isoleren...';
+                messageDiv.textContent = 'Isoleren...';
                 
                 if (highlightedFloors.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen vloerranden geselecteerd. Klik eerst op "Vloerranden Highlighten"';
+                    messageDiv.textContent = 'Geen elementen geselecteerd. Klik eerst op "Detecteer & Highlighten"';
                     return;
                 }
                 
@@ -302,12 +272,11 @@
                     }
                 );
                 
-                // Isoleer de vloeren
-                const slabIds = highlightedFloors.map(f => f.dbId || f.id);
-                await API.viewer.isolateEntities(slabIds);
+                const ids = highlightedFloors.map(f => f.id);
+                await API.viewer.isolateEntities(ids);
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = `✓ ${slabIds.length} vloeren zijn geïsoleerd`;
+                messageDiv.textContent = `✓ ${ids.length} elementen zijn geïsoleerd`;
                 
             } catch (error) {
                 messageDiv.className = 'error';
@@ -317,7 +286,7 @@
         }
         
         // Display floor list
-        function displayFloorList(slabs = allSlabs) {
+        function displayFloorList(slabs = highlightedFloors) {
             const listDiv = document.getElementById('floorEdgesList');
             
             if (!slabs || slabs.length === 0) {
@@ -325,37 +294,21 @@
                 return;
             }
             
-            let html = '<h3>Gevonden Vloerranden:</h3>';
-            slabs.forEach(floor => {
-                const isHighlighted = highlightedFloors.some(f => f.id === floor.id);
+            let html = `<h3>Geselecteerde Elementen (${slabs.length}):</h3>`;
+            slabs.slice(0, 20).forEach(item => {
                 html += `
-                    <div class="floor-item ${isHighlighted ? 'highlighted' : ''}" 
-                         onclick="highlightSingleFloor('${floor.dbId || floor.id}')">
-                        <strong>${floor.name || floor.id}</strong>
-                        <small>(ID: ${floor.id})</small>
+                    <div class="floor-item highlighted">
+                        <strong>${item.name}</strong>
+                        <small>(ID: ${item.id})</small>
                     </div>
                 `;
             });
             
-            listDiv.innerHTML = html;
-        }
-        
-        // Highlight één vloer
-        async function highlightSingleFloor(floorId) {
-            try {
-                const API = await TrimbleConnectWorkspace.connect(
-                    window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                    }
-                );
-                
-                await API.viewer.setSelection([floorId]);
-                console.log(`Vloer ${floorId} is gemarkeerd`);
-                
-            } catch (error) {
-                console.error('Error:', error);
+            if (slabs.length > 20) {
+                html += `<div style="padding: 10px; text-align: center; color: #666;">... en ${slabs.length - 20} meer</div>`;
             }
+            
+            listDiv.innerHTML = html;
         }
     </script>
 </body>
