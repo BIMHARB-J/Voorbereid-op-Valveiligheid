@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trimble Connect IFC Viewer </title>
+    <title>Trimble Connect IFC Viewer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -69,10 +69,6 @@
             color: #1976d2;
             border-left: 4px solid #1976d2;
         }
-        .info {
-            color: #1976d2;
-            border-left: 4px solid #1976d2;
-        }
         #floorEdgesList {
             margin-top: 10px;
             max-height: 300px;
@@ -101,17 +97,17 @@
 </head>
 <body>
     <div class="container">
-        <h1>Test JJJ</h1>
+        <h1>Trimble Connect IFC Viewer - Floor Edges Highlighter</h1>
         
         <div class="instruction">
-            <strong>Instructie:</strong> Test JJJ
+            <strong>Instructie:</strong> Klik op "Debug PsetDefinitions" om de property structure te zien
         </div>
         
         <div class="controls">
-            <button class="secondary" onclick="debugProperties()"> Zie Properties</button>
-            <button onclick="highlightSlabsAndRoofs()"> Highlighten SLAB & ROOF</button>
+            <button class="secondary" onclick="debugPsetDefinitions()">Debug PsetDefinitions</button>
+            <button onclick="highlightSlabsAndRoofs()">Highlighten SLAB & ROOF</button>
             <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
-            <button class="danger" onclick="isolateSelected()">Isoleer Gemarkeerde</button>
+            <button class="danger" onclick="isolateSelected()">Isoleer</button>
         </div>
         
         <div id="result" class="result">
@@ -121,72 +117,41 @@
         <div id="floorEdgesList"></div>
     </div>
 
-    <!-- Trimble Connect Workspace API Script -->
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     
     <script>
         let highlightedFloors = [];
         
-        // Debug: zie wat getPsetDefinitions geeft
-        async function debugProperties() {
+        // Debug PsetDefinitions
+        async function debugPsetDefinitions() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
             
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Debug mode: Properties ophalen...';
+                messageDiv.textContent = 'PsetDefinitions analyseren...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                    }
+                    (event, data) => {}
                 );
                 
-                // Haal alle objecten op
-                const allObjects = await API.viewer.getObjects();
-                const allIds = allObjects[0].objects.map(o => o.id);
-                
-                console.log('=== DEBUG MODE ===');
-                console.log('Total objects:', allIds.length);
-                
-                // Probeer getPsetDefinitions
-                console.log('Trying getPsetDefinitions...');
                 const psetDefs = await API.viewer.getPsetDefinitions();
-                console.log('PsetDefinitions:', psetDefs);
+                console.log('=== PSET DEFINITIONS ===');
+                console.log('Count:', psetDefs.length);
+                console.log('Full data:', JSON.stringify(psetDefs, null, 2));
                 
-                // Try first few objects
-                for (let i = 0; i < Math.min(3, allIds.length); i++) {
-                    console.log(`\n=== Object ${i} (ID: ${allIds[i]}) ===`);
-                    
-                    // Try different API calls
-                    try {
-                        const props = await API.viewer.getObjectProperties(allIds[i]);
-                        console.log('getObjectProperties:', props);
-                    } catch (e) {
-                        console.log('getObjectProperties error:', e.message);
+                psetDefs.forEach((pset, idx) => {
+                    console.log(`\n--- PsetDefinition ${idx} ---`);
+                    console.log('Keys:', Object.keys(pset));
+                    for (const [key, value] of Object.entries(pset)) {
+                        console.log(`${key}:`, value);
                     }
-                    
-                    // Try getHierarchyParents
-                    try {
-                        const parents = await API.viewer.getHierarchyParents([allIds[i]]);
-                        console.log('getHierarchyParents:', parents);
-                    } catch (e) {
-                        console.log('getHierarchyParents error:', e.message);
-                    }
-                    
-                    // Try getHierarchyChildren
-                    try {
-                        const children = await API.viewer.getHierarchyChildren([allIds[i]]);
-                        console.log('getHierarchyChildren:', children);
-                    } catch (e) {
-                        console.log('getHierarchyChildren error:', e.message);
-                    }
-                }
+                });
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = 'Debug info gelogd in console (F12)';
+                messageDiv.textContent = '✓ PsetDefinitions gelogd in console (F12)';
                 
             } catch (error) {
                 messageDiv.className = 'error';
@@ -195,7 +160,7 @@
             }
         }
         
-        // Highlighten SLAB en ROOF elementen
+        // Highlighten SLAB en ROOF
         async function highlightSlabsAndRoofs() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
@@ -203,67 +168,92 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'SLAB en ROOF elementen zoeken...';
-                console.log('=== START highlightSlabsAndRoofs ===');
+                messageDiv.textContent = 'Stap 1: PsetDefinitions ophalen...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                    }
+                    (event, data) => {}
                 );
                 
-                // Haal alle objecten op
+                // Haal PsetDefinitions op
+                const psetDefs = await API.viewer.getPsetDefinitions();
+                console.log('PsetDefinitions:', psetDefs);
+                
+                if (!psetDefs || psetDefs.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen PsetDefinitions gevonden';
+                    return;
+                }
+                
+                // Zoek naar Common Type property
+                const commonTypeDef = psetDefs.find(p => {
+                    const str = JSON.stringify(p).toLowerCase();
+                    return str.includes('common type') || str.includes('commontype');
+                });
+                
+                console.log('Common Type Pset:', commonTypeDef);
+                
+                messageDiv.textContent = 'Stap 2: Alle objecten ophalen...';
+                
                 const allObjects = await API.viewer.getObjects();
                 const allIds = allObjects[0].objects.map(o => o.id);
                 
                 console.log('Total objects:', allIds.length);
                 
-                // Try via hierarchy (parent-child relationships)
-                messageDiv.textContent = 'Elementen indelen via hierarchy...';
+                messageDiv.textContent = 'Stap 3: SLAB/ROOF elementen scannen...';
                 
                 const slabsAndRoofs = [];
                 
-                for (let i = 0; i < Math.min(200, allIds.length); i++) {
+                // Scan alle elementen
+                for (let i = 0; i < allIds.length; i++) {
                     try {
-                        const parents = await API.viewer.getHierarchyParents([allIds[i]]);
+                        // Selecteer element om properties te laden
+                        await API.viewer.setSelection([allIds[i]]);
                         
-                        if (parents && parents.length > 0) {
-                            // Check parent names for SLAB/ROOF
-                            const parentInfo = JSON.stringify(parents).toUpperCase();
+                        // Probeer properties via showModelDetails (dit laadt de properties panel)
+                        await API.viewer.showModelDetails([allIds[i]]);
+                        
+                        // Haal nu properties op
+                        const props = await API.viewer.getObjectProperties(allIds[i]);
+                        
+                        if (props && props.length > 0) {
+                            // Zoek naar SLAB of ROOF
+                            const isSlabOrRoof = props.some(p => 
+                                p.value === 'SLAB' || p.value === 'ROOF'
+                            );
                             
-                            if (parentInfo.includes('SLAB') || parentInfo.includes('ROOF')) {
+                            if (isSlabOrRoof) {
+                                const typeProp = props.find(p => p.value === 'SLAB' || p.value === 'ROOF');
                                 slabsAndRoofs.push({
                                     id: allIds[i],
-                                    name: `Element ${allIds[i]}`,
-                                    type: parentInfo.includes('SLAB') ? 'SLAB' : 'ROOF'
+                                    name: `${typeProp.value} ${allIds[i]}`,
+                                    type: typeProp.value
                                 });
-                                console.log(`✓ Found ${parentInfo.includes('SLAB') ? 'SLAB' : 'ROOF'}`);
+                                
+                                if (slabsAndRoofs.length % 10 === 0) {
+                                    console.log(`Found ${slabsAndRoofs.length} SLAB/ROOF elements`);
+                                }
                             }
                         }
                     } catch (e) {
-                        // Silent
+                        // Silent fail
                     }
                     
-                    if ((i + 1) % 50 === 0) {
-                        messageDiv.textContent = `Gecheckt ${i + 1}/200 elementen...`;
+                    if ((i + 1) % 500 === 0) {
+                        messageDiv.textContent = `Gecheckt ${i + 1}/${allIds.length} elementen... (${slabsAndRoofs.length} gevonden)`;
                     }
                 }
                 
-                console.log('Found via hierarchy:', slabsAndRoofs);
+                console.log('Found SLAB/ROOF:', slabsAndRoofs);
                 
                 if (slabsAndRoofs.length === 0) {
                     messageDiv.className = 'error';
-                    messageDiv.innerHTML = `
-                        <strong>Geen SLAB/ROOF gevonden via hierarchy</strong><br>
-                        <small>Probeer Debug Mode knop eerst om te zien hoe properties gestructureerd zijn</small>
-                    `;
+                    messageDiv.textContent = 'Geen SLAB/ROOF elementen gevonden';
                     return;
                 }
                 
-                messageDiv.textContent = `${slabsAndRoofs.length} elementen gevonden, highlighten...`;
+                messageDiv.textContent = `Stap 4: ${slabsAndRoofs.length} elementen selecteren...`;
                 
-                // Selecteer alle
                 const selectedIds = slabsAndRoofs.map(s => s.id);
                 await API.viewer.setSelection(selectedIds);
                 
@@ -271,7 +261,9 @@
                 
                 messageDiv.className = 'success';
                 messageDiv.innerHTML = `
-                    <strong>✓ ${slabsAndRoofs.length} elementen gemarkeerd!</strong>
+                    <strong>✓ ${slabsAndRoofs.length} SLAB/ROOF elementen gemarkeerd!</strong><br>
+                    <small>${slabsAndRoofs.filter(s => s.type === 'SLAB').length} Slabs | 
+                    ${slabsAndRoofs.filter(s => s.type === 'ROOF').length} Roofs</small>
                 `;
                 
                 displayFloorList();
@@ -284,7 +276,7 @@
             }
         }
         
-        // Reset highlight
+        // Reset
         async function resetHighlight() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
@@ -292,7 +284,7 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'Highlight wordt gereset...';
+                messageDiv.textContent = 'Resetten...';
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
@@ -304,7 +296,7 @@
                 document.getElementById('floorEdgesList').innerHTML = '';
                 
                 messageDiv.className = 'success';
-                messageDiv.textContent = '✓ Highlight is gereset';
+                messageDiv.textContent = '✓ Reset';
                 
             } catch (error) {
                 messageDiv.className = 'error';
@@ -312,7 +304,7 @@
             }
         }
         
-        // Isoleer geselecteerde elementen
+        // Isoleer
         async function isolateSelected() {
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
@@ -345,7 +337,6 @@
             }
         }
         
-        // Display floor list
         function displayFloorList(slabs = highlightedFloors) {
             const listDiv = document.getElementById('floorEdgesList');
             
@@ -354,13 +345,9 @@
                 return;
             }
             
-            let html = `<h3>Gemarkeerde Elementen (${slabs.length}):</h3>`;
+            let html = `<h3>Gemarkeerde (${slabs.length}):</h3>`;
             slabs.slice(0, 30).forEach(item => {
-                html += `
-                    <div class="floor-item highlighted">
-                        <strong>${item.name}</strong>
-                    </div>
-                `;
+                html += `<div class="floor-item highlighted"><strong>${item.name}</strong></div>`;
             });
             
             if (slabs.length > 30) {
