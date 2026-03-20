@@ -134,7 +134,8 @@
             try {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'loading';
-                messageDiv.textContent = 'SLAB en ROOF elementen zoeken via DataTable...';
+                messageDiv.textContent = 'Stap 1/6: Verbinding maken...';
+                console.log('=== START highlightSlabsAndRoofs ===');
                 
                 const API = await TrimbleConnectWorkspace.connect(
                     window.parent,
@@ -143,15 +144,19 @@
                     }
                 );
                 
+                console.log('API verbonden:', API);
+                messageDiv.textContent = 'Stap 2/6: DataTable config ophalen...';
+                
                 // Get DataTable config
                 const config = await API.dataTable.getConfig();
                 console.log('DataTable config:', config);
                 
-                messageDiv.textContent = 'Alle columns ophalen...';
+                messageDiv.textContent = 'Stap 3/6: Alle columns ophalen...';
                 
                 // Haal alle columns op
                 const allColumns = await API.dataTable.getAllColumns();
                 console.log('Alle columns:', allColumns);
+                console.log('Column names:', allColumns.map(c => c.name));
                 
                 // Zoek naar Common Type column
                 const commonTypeColumn = allColumns.find(col => 
@@ -162,12 +167,16 @@
                 
                 if (!commonTypeColumn) {
                     messageDiv.className = 'error';
-                    messageDiv.textContent = 'Common Type column niet gevonden in DataTable';
-                    console.log('Beschikbare columns:', allColumns.map(c => c.name).join(', '));
+                    messageDiv.innerHTML = `
+                        <strong>Common Type column niet gevonden!</strong><br>
+                        <small>Beschikbare columns: ${allColumns.map(c => c.name).join(', ')}</small>
+                    `;
+                    console.log('ERROR: Common Type column niet gevonden');
                     return;
                 }
                 
-                messageDiv.textContent = `Common Type column gevonden: ${commonTypeColumn.name}. Filteren...`;
+                console.log('Common Type column:', commonTypeColumn);
+                messageDiv.textContent = `Stap 4/6: Filter toepassen op ${commonTypeColumn.name}...`;
                 
                 // Maak filter config
                 const newConfig = {
@@ -181,14 +190,20 @@
                     ]
                 };
                 
+                console.log('New config:', newConfig);
+                
                 // Apply filter
                 await API.dataTable.setConfig(newConfig);
+                console.log('Filter applied');
                 
-                messageDiv.textContent = 'Gefilterde elementen ophalen...';
+                messageDiv.textContent = 'Stap 5/6: Gefilterde elementen ophalen...';
                 
                 // Haal alle objecten op (nu gefilterd)
                 const allObjects = await API.viewer.getObjects();
+                console.log('All objects after filter:', allObjects);
+                
                 const filteredIds = allObjects[0].objects.map(o => o.id);
+                console.log('Filtered IDs:', filteredIds);
                 
                 if (filteredIds.length === 0) {
                     messageDiv.className = 'error';
@@ -196,7 +211,7 @@
                     return;
                 }
                 
-                messageDiv.textContent = `${filteredIds.length} elementen gevonden, highlighten...`;
+                messageDiv.textContent = `Stap 6/6: ${filteredIds.length} elementen highlighten...`;
                 
                 // Selecteer alle gefilterde elementen
                 await API.viewer.setSelection(filteredIds);
@@ -214,12 +229,17 @@
                 `;
                 
                 displayFloorList();
+                console.log('=== COMPLETE ===');
                 
             } catch (error) {
                 resultDiv.classList.add('show');
                 messageDiv.className = 'error';
-                messageDiv.textContent = `Fout: ${error.message}`;
-                console.error('Error:', error);
+                messageDiv.innerHTML = `
+                    <strong>Fout:</strong> ${error.message}<br>
+                    <small>Check de browser console voor meer details</small>
+                `;
+                console.error('FULL ERROR:', error);
+                console.error('Stack:', error.stack);
             }
         }
         
@@ -266,4 +286,61 @@
             const resultDiv = document.getElementById('result');
             const messageDiv = document.getElementById('message');
             
-            try
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Isoleren...';
+                
+                if (highlightedFloors.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen elementen gemarkeerd. Klik eerst op "Highlighten SLAB & ROOF"';
+                    return;
+                }
+                
+                const API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        console.log('Event:', event, data);
+                    }
+                );
+                
+                const ids = highlightedFloors.map(f => f.id);
+                await API.viewer.isolateEntities(ids);
+                
+                messageDiv.className = 'success';
+                messageDiv.textContent = `✓ ${ids.length} elementen zijn geïsoleerd`;
+                
+            } catch (error) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Fout: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Display floor list
+        function displayFloorList(slabs = highlightedFloors) {
+            const listDiv = document.getElementById('floorEdgesList');
+            
+            if (!slabs || slabs.length === 0) {
+                listDiv.innerHTML = '';
+                return;
+            }
+            
+            let html = `<h3>Gemarkeerde Elementen (${slabs.length}):</h3>`;
+            slabs.slice(0, 30).forEach(item => {
+                html += `
+                    <div class="floor-item highlighted">
+                        <strong>${item.name}</strong>
+                    </div>
+                `;
+            });
+            
+            if (slabs.length > 30) {
+                html += `<div style="padding: 10px; text-align: center; color: #666;">... en ${slabs.length - 30} meer</div>`;
+            }
+            
+            listDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
