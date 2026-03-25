@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trimble Connect IFC Viewer - Floor Edges Highlighter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        button.secondary {
+            background-color: #666;
+        }
+        button.secondary:hover {
+            background-color: #444;
+        }
+        button.danger {
+            background-color: #d32f2f;
+        }
+        button.danger:hover {
+            background-color: #b71c1c;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .error {
+            color: #d32f2f;
+            border-left: 4px solid #d32f2f;
+        }
+        .success {
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+        .loading {
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+        #floorEdgesList {
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .floor-item {
+            padding: 8px;
+            background-color: white;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .floor-item.highlighted {
+            background-color: #ffeb3b;
+            border-color: #fbc02d;
+            font-weight: bold;
+        }
+        .instruction {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-left: 4px solid #1976d2;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trimble Connect IFC Viewer - Debug Events</h1>
+        
+        <div class="instruction">
+            <strong>Instructie:</strong> Klik op "Luister naar Events" en then klik op elementen in de 3D viewer
+        </div>
+        
+        <div class="controls">
+            <button class="secondary" onclick="listenToEvents()">👂 Luister naar Events</button>
+            <button class="secondary" onclick="stopListening()">⏹️ Stop</button>
+            <button onclick="highlightSlabsAndRoofs()">🎯 Highlighten SLAB & ROOF</button>
+            <button class="secondary" onclick="resetHighlight()">↻ Reset</button>
+        </div>
+        
+        <div id="result" class="result">
+            <p id="message"></p>
+        </div>
+        
+        <div id="eventLog" style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+    </div>
+
+    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+    
+    <script>
+        let API = null;
+        let eventListening = false;
+        
+        function logEvent(msg) {
+            console.log(msg);
+            const eventLog = document.getElementById('eventLog');
+            const timestamp = new Date().toLocaleTimeString();
+            eventLog.innerHTML += `<div>[${timestamp}] ${msg}</div>`;
+            eventLog.scrollTop = eventLog.scrollHeight;
+        }
+        
+        // Luister naar alle Trimble events
+        async function listenToEvents() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Events listener aan het zetten...';
+                
+                document.getElementById('eventLog').innerHTML = '';
+                
+                API = await TrimbleConnectWorkspace.connect(
+                    window.parent,
+                    (event, data) => {
+                        logEvent(`EVENT: ${event}`);
+                        console.log('Event data:', data);
+                        
+                        // Log specifieke events
+                        if (event === 'ObjectPropertiesUpdated') {
+                            logEvent(`✓ ObjectPropertiesUpdated: ${JSON.stringify(data)}`);
+                        }
+                        if (event === 'SelectionChanged') {
+                            logEvent(`✓ SelectionChanged: ${JSON.stringify(data)}`);
+                        }
+                        if (event === 'DetailsModelDataUpdated') {
+                            logEvent(`✓ DetailsModelDataUpdated: ${JSON.stringify(data)}`);
+                        }
+                    }
+                );
+                
+                eventListening = true;
+                
+                messageDiv.className = 'success';
+                messageDiv.textContent = '✓ Event listener actief! Klik nu op elementen in de 3D viewer en zie de events hieronder';
+                
+                logEvent('=== EVENT LISTENER GESTART ===');
+                logEvent('Klik op elementen in de 3D viewer...');
+                
+            } catch (error) {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Error: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
+        function stopListening() {
+            eventListening = false;
+            logEvent('=== EVENT LISTENER GESTOPT ===');
+        }
+        
+        // Highlighten SLAB en ROOF - met nieuwe aanpak
+        async function highlightSlabsAndRoofs() {
+            const resultDiv = document.getElementById('result');
+            const messageDiv = document.getElementById('message');
+            
+            try {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'loading';
+                messageDiv.textContent = 'Zoeken naar SLAB/ROOF via event-based approach...';
+                
+                if (!API) {
+                    API = await TrimbleConnectWorkspace.connect(
+                        window.parent,
+                        (event, data) => {
+                            console.log('Event:', event, data);
+                        }
+                    );
+                }
+                
+                const allObjects = await API.viewer.getObjects();
+                const objects = allObjects[0].objects;
+                
+                console.log('=== HIGHLIGHT SLAB/ROOF ===');
+                console.log('Total objects:', objects.length);
+                
+                const slabsAndRoofs = [];
+                
+                messageDiv.textContent = 'Scanning elementen en luisteren naar property updates...';
+                
+                // Loop door objecten en trigger property load
+                for (let i = 0; i < Math.min(100, objects.length); i++) {
+                    const objId = objects[i].id;
+                    
+                    // Selecteer object (dit triggert property load)
+                    await API.viewer.setSelection([objId]);
+                    
+                    // Wacht op property update event
+                    const props = await new Promise(resolve => {
+                        const timeout = setTimeout(() => resolve([]), 200);
+                        
+                        // Probeer meteen properties op te halen
+                        setTimeout(async () => {
+                            const p = await API.viewer.getObjectProperties(objId);
+                            clearTimeout(timeout);
+                            resolve(p || []);
+                        }, 50);
+                    });
+                    
+                    if (props.length > 0) {
+                        console.log(`Object ${i} (ID: ${objId}):`, props.map(p => `${p.name}=${p.value}`).join(', '));
+                        
+                        // Check for SLAB/ROOF
+                        const isSlabOrRoof = props.some(p => p.value === 'SLAB' || p.value === 'ROOF');
+                        if (isSlabOrRoof) {
+                            const type = props.find(p => p.value === 'SLAB' || p.value === 'ROOF')?.value;
+                            slabsAndRoofs.push({
+                                id: objId,
+                                name: `${type} ${objId}`,
+                                type: type
+                            });
+                            console.log(`✓ FOUND ${type}`);
+                        }
+                    }
+                    
+                    if ((i + 1) % 20 === 0) {
+                        messageDiv.textContent = `Gecheckt ${i + 1}/100 (${slabsAndRoofs.length} gevonden)...`;
+                    }
+                }
+                
+                if (slabsAndRoofs.length === 0) {
+                    messageDiv.className = 'error';
+                    messageDiv.textContent = 'Geen SLAB/ROOF gevonden. Klik eerst op "Luister naar Events" en klik op elementen in viewer.';
+                    return;
+                }
+                
+                const selectedIds = slabsAndRoofs.map(s => s.id);
+                await API.viewer.setSelection(selectedIds);
+                
+                messageDiv.className = 'success';
+                messageDiv.innerHTML = `
+                    <strong>✓ ${slabsAndRoofs.length} SLAB/ROOF gevonden!</strong>
+                `;
+                
+            } catch (error) {
+                resultDiv.classList.add('show');
+                messageDiv.className = 'error';
+                messageDiv.textContent = `Error: ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+        
+        async function resetHighlight() {
+            try {
+                if (!API) {
+                    API = await TrimbleConnectWorkspace.connect(
+                        window.parent,
+                        (event, data) => {}
+                    );
+                }
+                await API.viewer.setSelection([]);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
