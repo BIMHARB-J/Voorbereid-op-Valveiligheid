@@ -20,41 +20,12 @@ body {
   font-family: 'Poppins', sans-serif;
 }
 
-.scene.active {
-
-opacity: 1;
-
-}
-
 .scroll-step {
 
 opacity: 0;
 transform: translateY(20px);
 position: absolute;
 transition: all 0.6s ease;
-
-}
-
-.scene {
-
-position: absolute;
-top: 0;
-left: 0;
-
-width: 100%;
-height: 100%;
-
-object-fit: cover;
-
-transform: translateY(100%);
-transition: transform 1.1s cubic-bezier(.77,0,.18,1);
-
-z-index: 1;
-
-}
-.scene:first-child {
-
-transform: translateY(0);
 
 }
 
@@ -213,18 +184,14 @@ Menselijke expertise gecombineerd met automatische analyse.
 
 
 <!-- RIGHT IMAGE VIEWPORT -->
-
 <div class="w-2/3 h-screen overflow-hidden relative bg-black">
 
-<div id="scene-container" class="absolute inset-0">
-
-<img class="scene" src="05_images/scene1.png">
-<img class="scene" src="05_images/scene2.png">
-<img class="scene" src="05_images/scene3.png">
-<img class="scene" src="05_images/scene4.png">
-
-</div>
-
+  <img
+    id="scroll-image"
+    src="05_images/edgeprotector-concept.png"
+    class="absolute top-0 left-0 w-full"
+    style="height: 400vh; object-fit: contain;"
+  />
 </div>
 
 </section>
@@ -296,9 +263,20 @@ window.addEventListener("DOMContentLoaded", () => {
 
 const section = document.querySelector("#scroll-story");
 const steps = document.querySelectorAll(".scroll-step");
-const scenes = document.querySelectorAll(".scene");
+const image = document.querySelector("#scroll-image");
 
-if (!section || !steps.length || !scenes.length) return;
+if (!section || !steps.length || !image) return;
+
+let imageHeight = 0;
+
+function updateImageHeight() {
+imageHeight = image.offsetHeight - window.innerHeight;
+}
+
+window.addEventListener("load", updateImageHeight);
+window.addEventListener("resize", updateImageHeight);
+
+updateImageHeight();
 
 window.addEventListener("scroll", () => {
 
@@ -321,26 +299,9 @@ if (steps[activeStep]) {
 steps[activeStep].classList.add("active");
 }
 
-scenes.forEach((scene, index) => {
+const imageScroll = progress * imageHeight;
 
-if (index === activeStep) {
-
-scene.style.transform = "translateY(0)";
-scene.style.zIndex = 10;
-
-} else if (index < activeStep) {
-
-scene.style.transform = "translateY(-100%)";
-scene.style.zIndex = 5;
-
-} else {
-
-scene.style.transform = "translateY(100%)";
-scene.style.zIndex = 1;
-
-}
-
-});
+image.style.transform = `translateY(-${imageScroll}px)`;
 
 });
 
