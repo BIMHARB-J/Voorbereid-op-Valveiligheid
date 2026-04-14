@@ -119,48 +119,44 @@ transform: translateY(0px);
 
 <!-- SCROLL STORY SECTION -->
 
-<section class="relative h-[400vh]">
+<section id="scroll-story" class="relative h-[400vh]">
 
-<div class="sticky top-0 h-screen flex items-center">
+<div class="sticky top-0 h-screen flex">
 
-<!-- LEFT TEXT AREA -->
-<div class="w-1/3 pl-16">
+<!-- LEFT TEXT -->
+<div class="w-1/3 flex items-center pl-16 relative">
 
-<div class="scroll-step step-1 active">
+<div class="scroll-step active">
 <h2 class="text-4xl font-semibold mb-6">
 Automatische randdetectie
 </h2>
-
 <p class="text-lg text-gray-500">
 EdgeProtector detecteert vloerranden automatisch binnen IFC-modellen.
 </p>
 </div>
 
-<div class="scroll-step step-2">
+<div class="scroll-step">
 <h2 class="text-4xl font-semibold mb-6">
 Herkenning van sparingen
 </h2>
-
 <p class="text-lg text-gray-500">
 Openingen en sparingen worden zichtbaar voordat uitvoering start.
 </p>
 </div>
 
-<div class="scroll-step step-3">
+<div class="scroll-step">
 <h2 class="text-4xl font-semibold mb-6">
 Visueel inzicht voor ontwerpteams
 </h2>
-
 <p class="text-lg text-gray-500">
 Ontwerpers zien direct waar randbeveiliging nodig is.
 </p>
 </div>
 
-<div class="scroll-step step-4">
+<div class="scroll-step">
 <h2 class="text-4xl font-semibold mb-6">
 Industry 5.0 samenwerking
 </h2>
-
 <p class="text-lg text-gray-500">
 Menselijke expertise gecombineerd met automatische analyse.
 </p>
@@ -169,13 +165,13 @@ Menselijke expertise gecombineerd met automatische analyse.
 </div>
 
 
-<!-- RIGHT IMAGE FULL BLEED -->
-
-<div class="absolute right-0 top-0 w-2/3 h-screen">
+<!-- RIGHT IMAGE VIEWPORT -->
+<div class="w-2/3 h-screen overflow-hidden relative">
 
 <img
+id="scroll-image"
 src="05_images/edgeprotector-concept.png"
-class="w-full h-full object-cover"
+class="absolute top-0 left-0 w-full h-[400vh] object-cover"
 />
 
 </div>
@@ -245,24 +241,36 @@ class="w-full h-full object-cover"
 </section>
 
 <!-- AOS SCRIPT -->
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-
 <script>
 
-const section = document.querySelector("section.relative");
+const section = document.querySelector("#scroll-story");
 const steps = document.querySelectorAll(".scroll-step");
+const image = document.querySelector("#scroll-image");
+
+let imageHeight = 0;
+
+function updateImageHeight() {
+imageHeight = image.offsetHeight - window.innerHeight;
+}
+
+window.addEventListener("load", updateImageHeight);
+window.addEventListener("resize", updateImageHeight);
+
 
 window.addEventListener("scroll", () => {
 
 const rect = section.getBoundingClientRect();
 const sectionHeight = section.offsetHeight - window.innerHeight;
 
-const progress = Math.min(
+let progress = Math.min(
 Math.max(-rect.top / sectionHeight, 0),
 1
 );
 
-const activeStep = Math.floor(progress * steps.length);
+const activeStep = Math.min(
+Math.floor(progress * steps.length),
+steps.length - 1
+);
 
 steps.forEach(step => step.classList.remove("active"));
 
@@ -270,11 +278,14 @@ if (steps[activeStep]) {
 steps[activeStep].classList.add("active");
 }
 
+const imageScroll = progress * imageHeight;
+
+image.style.transform = `translateY(-${imageScroll}px)`;
+
 });
 
 AOS.init();
 
 </script>
-
 </body>
 </html>
