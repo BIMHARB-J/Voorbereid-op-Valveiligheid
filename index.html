@@ -20,6 +20,27 @@ body {
   font-family: 'Poppins', sans-serif;
 }
 
+.scene {
+
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+
+object-fit: contain;
+
+opacity: 0;
+transition: opacity 0.6s ease;
+
+}
+
+.scene.active {
+
+opacity: 1;
+
+}
+
 .scroll-step {
 
 opacity: 0;
@@ -184,14 +205,14 @@ Menselijke expertise gecombineerd met automatische analyse.
 
 
 <!-- RIGHT IMAGE VIEWPORT -->
-<div class="w-2/3 h-screen overflow-hidden relative bg-black">
 
-  <img
-    id="scroll-image"
-    src="05_images/edgeprotector-concept.png"
-    class="absolute top-0 left-0 w-full"
-    style="height: 400vh; object-fit: contain;"
-  />
+<div class="relative w-full h-full">
+
+<img class="scene active" src="05_images/scene1.png">
+<img class="scene" src="05_images/scene2.png">
+<img class="scene" src="05_images/scene3.png">
+<img class="scene" src="05_images/scene4.png">
+
 </div>
 
 </section>
@@ -263,20 +284,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
 const section = document.querySelector("#scroll-story");
 const steps = document.querySelectorAll(".scroll-step");
-const image = document.querySelector("#scroll-image");
+const scenes = document.querySelectorAll(".scene");
 
-if (!section || !steps.length || !image) return;
-
-let imageHeight = 0;
-
-function updateImageHeight() {
-imageHeight = image.offsetHeight - window.innerHeight;
-}
-
-window.addEventListener("load", updateImageHeight);
-window.addEventListener("resize", updateImageHeight);
-
-updateImageHeight();
+if (!section || !steps.length || !scenes.length) return;
 
 window.addEventListener("scroll", () => {
 
@@ -299,9 +309,11 @@ if (steps[activeStep]) {
 steps[activeStep].classList.add("active");
 }
 
-const imageScroll = progress * imageHeight;
+scenes.forEach(scene => scene.classList.remove("active"));
 
-image.style.transform = `translateY(-${imageScroll}px)`;
+if (scenes[activeStep]) {
+scenes[activeStep].classList.add("active");
+}
 
 });
 
