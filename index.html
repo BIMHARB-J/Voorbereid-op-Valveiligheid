@@ -243,9 +243,13 @@ class="absolute top-0 left-0 w-full h-[400vh] object-cover"
 <!-- AOS SCRIPT -->
 <script>
 
+window.addEventListener("DOMContentLoaded", () => {
+
 const section = document.querySelector("#scroll-story");
 const steps = document.querySelectorAll(".scroll-step");
 const image = document.querySelector("#scroll-image");
+
+if (!section || !steps.length || !image) return;
 
 let imageHeight = 0;
 
@@ -255,7 +259,6 @@ imageHeight = image.offsetHeight - window.innerHeight;
 
 window.addEventListener("load", updateImageHeight);
 window.addEventListener("resize", updateImageHeight);
-
 
 window.addEventListener("scroll", () => {
 
@@ -284,8 +287,13 @@ image.style.transform = `translateY(-${imageScroll}px)`;
 
 });
 
+if (typeof AOS !== "undefined") {
 AOS.init();
+}
+
+});
 
 </script>
+
 </body>
 </html>
