@@ -94,7 +94,7 @@ p {
 
 <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50">
 
-<img src="05_images/02_icon/LOGOIMPACT.png" class="h-8">
+<img id="site-logo" src="05_images/02_icon/LOGOIMPACTnbg.svg"  class="h-16 md:h-20 text-black transition duration-300">
 
 </div>
 
@@ -382,6 +382,27 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.querySelector("nav").addEventListener("mouseleave", () => {
     indicator.style.width = "0px";
+  });
+
+  const logo = document.getElementById("site-logo");
+  const storySection = document.getElementById("scroll-story");
+
+  window.addEventListener("scroll", () => {
+
+  const rect = storySection.getBoundingClientRect();
+
+  if (rect.top <= 100 && rect.bottom >= 100) {
+
+  logo.classList.remove("text-black");
+  logo.classList.add("text-white");
+
+  } else {
+
+  logo.classList.remove("text-white");
+  logo.classList.add("text-black");
+
+  }
+
   });
 
   AOS.init();
