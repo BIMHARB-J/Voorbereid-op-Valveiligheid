@@ -94,13 +94,16 @@ p {
 
 <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50">
 
-<img id="site-logo" src="05_images/02_icon/LOGOIMPACTnbg.svg"  class="h-16 md:h-20 text-black transition duration-300">
+<img id="site-logo" src="05_images/02_icon/LOGOIMPACTnbg.svg"  class="h-24 text-black transition duration-300">
 
 </div>
 
 <header class="fixed top-6 left-[16.666%] -translate-x-1/2 z-50">
 
-<nav class="relative bg-white/70 backdrop-blur-xl border border-gray-200 rounded-full px-6 py-3 shadow-md">
+<nav id="navbar"
+class="relative transition-all duration-300
+bg-transparent
+px-6 py-3 rounded-full">
 
 <div class="relative flex gap-8 items-center">
 
@@ -383,29 +386,56 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelector("nav").addEventListener("mouseleave", () => {
     indicator.style.width = "0px";
   });
+  const navbar = document.getElementById("navbar");
 
-  const logo = document.getElementById("site-logo");
-  const storySection = document.getElementById("scroll-story");
+  let lastScroll = 0;
 
   window.addEventListener("scroll", () => {
 
-  const rect = storySection.getBoundingClientRect();
+  const currentScroll = window.scrollY;
 
-  if (rect.top <= 100 && rect.bottom >= 100) {
+  // achtergrond activeren zodra je scrollt
 
-  logo.classList.remove("text-black");
-  logo.classList.add("text-white");
+  if (currentScroll > 40) {
+
+  navbar.classList.add(
+  "bg-white/80",
+  "backdrop-blur-xl",
+  "shadow-md",
+  "border",
+  "border-gray-200"
+  );
 
   } else {
 
-  logo.classList.remove("text-white");
-  logo.classList.add("text-black");
+  navbar.classList.remove(
+  "bg-white/80",
+  "backdrop-blur-xl",
+  "shadow-md",
+  "border",
+  "border-gray-200"
+  );
 
   }
+
+  // navbar verbergen bij scroll naar beneden
+
+  if (currentScroll > lastScroll && currentScroll > 120) {
+
+  navbar.style.transform = "translateY(-120%)";
+
+  } else {
+
+  navbar.style.transform = "translateY(0)";
+
+  }
+
+  lastScroll = currentScroll;
 
   });
 
   AOS.init();
+  
 });
 </script>
 </script>
