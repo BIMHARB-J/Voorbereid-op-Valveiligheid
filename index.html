@@ -90,24 +90,24 @@ p {
 
 </head>
 
-<body class="bg-white text-gray-900">
+<body class="bg-white text-gray-900 pt-20">
 
-<div class="fixed top-6 left-1/2 -translate-x-1/2 z-50">
 
-<img id="site-logo" src="05_images/02_icon/LOGOIMPACTnbg.svg"  class="h-24 text-black transition duration-300">
+<header id="site-header"
+class="fixed top-0 left-0 w-full z-50
+bg-white shadow-sm
+transition-transform duration-300">
 
-</div>
+<div class="relative h-20">
 
-<header class="fixed top-6 left-[16.666%] -translate-x-1/2 z-50">
+<!-- NAV PLANE LINKS -->
 
-<nav id="navbar"
-class="relative transition-all duration-300
-bg-transparent
-px-6 py-3 rounded-full">
+<div class="absolute left-[16.66%] top-1/2 -translate-y-1/2">
+
+<nav class="relative bg-white/70 backdrop-blur-xl border border-gray-200 rounded-full px-6 py-3 shadow-md">
 
 <div class="relative flex gap-8 items-center">
 
-<!-- sliding highlight -->
 <div id="nav-indicator"
 class="absolute bg-gray-200 rounded-full transition-all duration-300 ease-in-out h-10 top-1/2 -translate-y-1/2"
 style="width:0; left:0;">
@@ -126,9 +126,21 @@ Concept
 </a>
 
 </div>
-
 </nav>
 
+</div>
+
+
+<!-- LOGO MIDDEN PAGINA -->
+
+<div class="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+
+<img id="site-logo" src="05_images/02_icon/LOGOIMPACTnbg.svg"  class="h-24 text-black transition duration-300">
+
+</div>
+
+
+</div>
 </header>
 
 <!-- HERO -->
@@ -386,7 +398,7 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelector("nav").addEventListener("mouseleave", () => {
     indicator.style.width = "0px";
   });
-  const navbar = document.getElementById("navbar");
+  const header = document.getElementById("site-header");
 
   let lastScroll = 0;
 
@@ -394,39 +406,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const currentScroll = window.scrollY;
 
-  // achtergrond activeren zodra je scrollt
-
-  if (currentScroll > 40) {
-
-  navbar.classList.add(
-  "bg-white/80",
-  "backdrop-blur-xl",
-  "shadow-md",
-  "border",
-  "border-gray-200"
-  );
-
-  } else {
-
-  navbar.classList.remove(
-  "bg-white/80",
-  "backdrop-blur-xl",
-  "shadow-md",
-  "border",
-  "border-gray-200"
-  );
-
-  }
-
-  // navbar verbergen bij scroll naar beneden
-
   if (currentScroll > lastScroll && currentScroll > 120) {
 
-  navbar.style.transform = "translateY(-120%)";
+  header.style.transform = "translateY(-100%)";
 
   } else {
 
-  navbar.style.transform = "translateY(0)";
+  header.style.transform = "translateY(0)";
 
   }
 
