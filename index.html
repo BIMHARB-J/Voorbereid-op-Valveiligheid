@@ -91,6 +91,39 @@ p {
 </head>
 
 <body class="bg-white text-gray-900">
+<header class="fixed top-6 left-1/2 -translate-x-1/2 z-50">
+
+<nav class="relative bg-white/70 backdrop-blur-xl border border-gray-200 rounded-full px-6 py-3 shadow-md">
+
+<div class="relative flex gap-8 items-center">
+
+<!-- sliding highlight -->
+<div id="nav-indicator"
+class="absolute bg-gray-200 rounded-full transition-all duration-300 ease-in-out h-10 top-1/2 -translate-y-1/2"
+style="width:0; left:0;">
+</div>
+
+<a class="nav-item relative px-4 py-2 z-10 cursor-pointer">
+EdgeProtector
+</a>
+
+<div class="w-8 flex justify-center">
+<img src="logo.png" class="h-6">
+</div>
+
+<a class="nav-item relative px-4 py-2 z-10 cursor-pointer">
+Demo
+</a>
+
+<a class="nav-item relative px-4 py-2 z-10 cursor-pointer">
+Concept
+</a>
+
+</div>
+
+</nav>
+
+</header>
 
 <!-- HERO -->
 <section class="h-screen flex items-center justify-center text-center px-6">
@@ -293,67 +326,64 @@ In het samenwerkingsverband van het projectteam, kunnen project specifieke afweg
 
 </section>
 
-<!-- AOS SCRIPT -->
+<!-- AOS script -->
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
 <script>
-
 window.addEventListener("DOMContentLoaded", () => {
+  const section = document.querySelector("#scroll-story");
+  const steps = document.querySelectorAll(".scroll-step");
+  const scenes = document.querySelectorAll(".scene");
 
-const section = document.querySelector("#scroll-story");
-const steps = document.querySelectorAll(".scroll-step");
-const scenes = document.querySelectorAll(".scene");
+  if (!section || !steps.length || !scenes.length) return;
 
-if (!section || !steps.length || !scenes.length) return;
+  window.addEventListener("scroll", () => {
+    const rect = section.getBoundingClientRect();
+    const sectionHeight = section.offsetHeight - window.innerHeight;
 
-window.addEventListener("scroll", () => {
+    let progress = Math.min(Math.max(-rect.top / sectionHeight, 0), 1);
 
-const rect = section.getBoundingClientRect();
-const sectionHeight = section.offsetHeight - window.innerHeight;
+    const activeStep = Math.min(
+      Math.floor(progress * steps.length),
+      steps.length - 1
+    );
 
-let progress = Math.min(
-Math.max(-rect.top / sectionHeight, 0),
-1
-);
+    steps.forEach(step => step.classList.remove("active"));
+    if (steps[activeStep]) steps[activeStep].classList.add("active");
 
-const activeStep = Math.min(
-Math.floor(progress * steps.length),
-steps.length - 1
-);
+    scenes.forEach((scene, index) => {
+      if (index === activeStep) {
+        scene.style.transform = "translateY(0)";
+        scene.style.zIndex = 10;
+      } else if (index < activeStep) {
+        scene.style.transform = "translateY(-100%)";
+        scene.style.zIndex = 5;
+      } else {
+        scene.style.transform = "translateY(100%)";
+        scene.style.zIndex = 1;
+      }
+    });
+  });
 
-steps.forEach(step => step.classList.remove("active"));
+  const indicator = document.getElementById("nav-indicator");
+  const items = document.querySelectorAll(".nav-item");
 
-if (steps[activeStep]) {
-steps[activeStep].classList.add("active");
-}
+  items.forEach(item => {
+    item.addEventListener("mouseenter", () => {
+      const rect = item.getBoundingClientRect();
+      const parentRect = item.parentElement.getBoundingClientRect();
+      indicator.style.width = rect.width + "px";
+      indicator.style.left = rect.left - parentRect.left + "px";
+    });
+  });
 
-scenes.forEach((scene, index) => {
+  document.querySelector("nav").addEventListener("mouseleave", () => {
+    indicator.style.width = "0px";
+  });
 
-if (index === activeStep) {
-
-scene.style.transform = "translateY(0)";
-scene.style.zIndex = 10;
-
-} else if (index < activeStep) {
-
-scene.style.transform = "translateY(-100%)";
-scene.style.zIndex = 5;
-
-} else {
-
-scene.style.transform = "translateY(100%)";
-scene.style.zIndex = 1;
-
-}
-
+  AOS.init();
 });
-
-});
-
-if (typeof AOS !== "undefined") {
-AOS.init();
-}
-
-});
-
+</script>
 </script>
 
 </body>
