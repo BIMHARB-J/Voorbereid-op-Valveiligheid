@@ -86,6 +86,31 @@ p {
   line-height: 1.6;
 }
 
+#floating-monitor {
+
+position: sticky;
+top: 140px;
+
+display: flex;
+justify-content: center;
+
+pointer-events: none;
+z-index: 40;
+
+margin-top: -35vh;
+
+}
+
+
+#hero-monitor {
+
+width: 1350px;
+max-width: 92vw;
+
+filter: drop-shadow(0 90px 160px rgba(0,0,0,0.25));
+
+}
+
 </style>
 
 </head>
@@ -99,6 +124,17 @@ bg-white shadow-sm
 transition-transform duration-300">
 
 <div class="relative h-20">
+
+<!-- FLOATING MONITOR LAYER -->
+
+<div id="floating-monitor">
+
+<img
+id="hero-monitor"
+src="05_images/EdgeProtectorintrimblenbg.png"
+/>
+
+</div>
 
 <!-- NAV PLANE LINKS -->
 
@@ -144,7 +180,10 @@ Demo
 </header>
 
 <!-- HERO -->
-<section id="hero" class="relative h-[120vh] bg-gray-100 flex flex-col items-center text-center pt-40">
+<section
+id="hero"
+class="relative h-[120vh] bg-gray-100 flex flex-col items-center text-center pt-40"
+>
 
 <div id="hero-text" class="relative z-30">
 
@@ -159,23 +198,6 @@ Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de v
 </div>
 
 </section>
-
-<!-- MONITOR -->
-<div id="hero-monitor-wrapper"
-class="relative h-[120vh] pointer-events-none">
-
-<div class="sticky top-[80px] flex justify-center">
-
-<img
-id="hero-monitor"
-src="05_images/EdgeProtectorintrimblenbg.png"
-class="w-[1350px] max-w-[92vw]
-drop-shadow-[0_90px_160px_rgba(0,0,0,0.25)]"
-/>
-
-</div>
-
-</div>
 
 <!-- PROBLEEM -->
 <section class="relative z-10 bg-white py-40 text-center px-6">
