@@ -144,13 +144,9 @@ Demo
 </header>
 
 <!-- HERO -->
-<section class="relative h-[200vh] bg-gray-100">
+<section id="hero" class="relative h-[120vh] bg-gray-100 flex flex-col items-center text-center pt-40">
 
-<div class="sticky top-0 h-screen flex flex-col items-center justify-start pt-40">
-
-<!-- TEXT -->
-
-<div id="hero-text" class="relative z-30 text-center">
+<div id="hero-text" class="relative z-30">
 
 <h1 class="text-6xl font-bold mb-6">
 EdgeProtector
@@ -162,25 +158,27 @@ Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de v
 
 </div>
 
+</section>
 
 <!-- MONITOR -->
+<div id="hero-monitor-wrapper"
+class="relative h-[120vh] pointer-events-none">
 
-<div class="mt-32">
+<div class="sticky top-[80px] flex justify-center">
 
 <img
 id="hero-monitor"
 src="05_images/EdgeProtectorintrimblenbg.png"
-class="w-[1350px] max-w-[92vw] drop-shadow-[0_90px_160px_rgba(0,0,0,0.25)]"
+class="w-[1350px] max-w-[92vw]
+drop-shadow-[0_90px_160px_rgba(0,0,0,0.25)]"
 />
 
 </div>
 
 </div>
 
-</section>
-
 <!-- PROBLEEM -->
-<section class="py-40 bg-white text-center px-6">
+<section class="relative z-10 bg-white py-40 text-center px-6">
 
   <div data-aos="fade-up">
 
@@ -433,12 +431,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
   });
 
-  const heroSection = document.querySelector("section");
+  const hero = document.getElementById("hero");
   const heroText = document.getElementById("hero-text");
 
   window.addEventListener("scroll", () => {
 
-  const rect = heroSection.getBoundingClientRect();
+  const rect = hero.getBoundingClientRect();
 
   const progress = Math.min(
   Math.max(-rect.top / window.innerHeight, 0),
@@ -447,22 +445,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   heroText.style.transform =
   `translateY(${progress * -200}px)`;
-
-  });
-
-  const monitor = document.getElementById("hero-monitor");
-
-  window.addEventListener("scroll", () => {
-
-  const rect = heroSection.getBoundingClientRect();
-
-  const progress = Math.min(
-  Math.max(-rect.top / window.innerHeight, 0),
-  1
-  );
-
-  monitor.style.transform =
-  `translateY(${progress * 160}px)`;
 
   });
 
