@@ -144,15 +144,19 @@ Demo
 </header>
 
 <!-- HERO -->
-<section class="relative h-[150vh] bg-gray-100 flex flex-col items-center text-center pt-44 overflow-visible">
+<section class="relative h-[200vh] bg-gray-100">
 
-<div id="hero-text" class="relative z-30 transition-transform duration-300">
+<div class="sticky top-0 h-screen flex flex-col items-center justify-start pt-40">
+
+<!-- TEXT -->
+
+<div id="hero-text" class="relative z-30 text-center">
 
 <h1 class="text-6xl font-bold mb-6">
 EdgeProtector
 </h1>
 
-<p class="text-2xl text-gray-500 mb-10 max-w-2xl mx-auto">
+<p class="text-2xl text-gray-500 max-w-2xl mx-auto">
 Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de voorbereiding.
 </p>
 
@@ -161,7 +165,7 @@ Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de v
 
 <!-- MONITOR -->
 
-<div class="absolute top-[460px] left-1/2 -translate-x-1/2 z-20">
+<div class="mt-32">
 
 <img
 id="hero-monitor"
@@ -171,10 +175,12 @@ class="w-[1350px] max-w-[92vw] drop-shadow-[0_90px_160px_rgba(0,0,0,0.25)]"
 
 </div>
 
+</div>
+
 </section>
 
 <!-- PROBLEEM -->
-<section class="pt-[420px] pb-40 bg-white text-center px-6 relative z-10">
+<section class="py-40 bg-white text-center px-6">
 
   <div data-aos="fade-up">
 
@@ -427,14 +433,20 @@ window.addEventListener("DOMContentLoaded", () => {
 
   });
 
+  const heroSection = document.querySelector("section");
   const heroText = document.getElementById("hero-text");
 
   window.addEventListener("scroll", () => {
 
-  let scroll = window.scrollY;
+  const rect = heroSection.getBoundingClientRect();
+
+  const progress = Math.min(
+  Math.max(-rect.top / window.innerHeight, 0),
+  1
+  );
 
   heroText.style.transform =
-  `translateY(${scroll * -0.45}px)`;
+  `translateY(${progress * -200}px)`;
 
   });
 
@@ -442,10 +454,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("scroll", () => {
 
-  let scroll = window.scrollY;
+  const rect = heroSection.getBoundingClientRect();
+
+  const progress = Math.min(
+  Math.max(-rect.top / window.innerHeight, 0),
+  1
+  );
 
   monitor.style.transform =
-  `translate(-50%, ${scroll * 0.12}px)`;
+  `translateY(${progress * 160}px)`;
 
   });
 
