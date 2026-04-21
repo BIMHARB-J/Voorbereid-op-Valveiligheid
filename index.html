@@ -144,39 +144,37 @@ Demo
 </header>
 
 <!-- HERO -->
-<section class="relative h-[110vh] flex items-center justify-center text-center px-6 bg-gray-100">
+<section class="relative h-[150vh] bg-gray-100 flex flex-col items-center text-center pt-44 overflow-visible">
 
-  <div data-aos="fade-up">
+<div id="hero-text" class="relative z-30 transition-transform duration-300">
 
-    <h1 class="text-6xl font-bold mb-6">
-      EdgeProtector
-    </h1>
+<h1 class="text-6xl font-bold mb-6">
+EdgeProtector
+</h1>
 
-    <p class="text-2xl text-gray-500 mb-10 max-w-2xl mx-auto">
-      Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de voorbereiding.
-    </p>
+<p class="text-2xl text-gray-500 mb-10 max-w-2xl mx-auto">
+Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de voorbereiding.
+</p>
 
-    <a href="https://github.com/BIMHARB-J/voorbereid-op-valveiligheid"
-       class="bg-black text-white px-8 py-4 rounded-xl text-lg">
-      Bekijk op GitHub
-    </a>
+</div>
 
-  </div>
 
-  <div class="absolute bottom-[-140px] left-1/2 -translate-x-1/2 z-20">
+<!-- MONITOR -->
 
-  <img
-  id="hero-monitor"
-  src="05_images/EdgeProtectorintrimblenbg.png"
-  class="w-[900px] max-w-[90vw] shadow-2xl rounded-xl"
-  >
+<div class="absolute top-[460px] left-1/2 -translate-x-1/2 z-20">
 
-  </div>
+<img
+id="hero-monitor"
+src="05_images/EdgeProtectorintrimblenbg.png"
+class="w-[1350px] max-w-[92vw] drop-shadow-[0_90px_160px_rgba(0,0,0,0.25)]"
+/>
+
+</div>
 
 </section>
 
 <!-- PROBLEEM -->
-<section class="pt-[220px] pb-40 bg-white text-center px-6">
+<section class="pt-[420px] pb-40 bg-white text-center px-6 relative z-10">
 
   <div data-aos="fade-up">
 
@@ -429,16 +427,27 @@ window.addEventListener("DOMContentLoaded", () => {
 
   });
 
-  const heroImage = document.querySelector("#hero-monitor");
+  const heroText = document.getElementById("hero-text");
 
   window.addEventListener("scroll", () => {
 
-  const scroll = window.scrollY;
+  let scroll = window.scrollY;
 
-  heroImage.style.transform =
-  `translate(-50%, ${scroll * 0.15}px)`;
+  heroText.style.transform =
+  `translateY(${scroll * -0.45}px)`;
 
-  }); 
+  });
+
+  const monitor = document.getElementById("hero-monitor");
+
+  window.addEventListener("scroll", () => {
+
+  let scroll = window.scrollY;
+
+  monitor.style.transform =
+  `translate(-50%, ${scroll * 0.12}px)`;
+
+  });
 
   AOS.init();
 
