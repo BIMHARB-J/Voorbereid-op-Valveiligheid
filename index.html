@@ -215,20 +215,77 @@ Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de v
 
 </section>
 
-<!-- INDUSTRY 5.0 -->
-<section class="py-40 bg-gray-50 text-center px-6">
+<!-- INDUSTRY 5.0 + DEMO-->
+<section class="py-40 bg-gray-100 px-10">
 
-  <div data-aos="fade-up">
+<div class="max-w-7xl mx-auto grid grid-cols-[1.4fr_1fr] gap-12 items-start">
 
-    <h2 class="text-5xl font-semibold mb-6">
-      LEEG
-    </h2>
 
-    <p class="text-xl text-gray-500 max-w-3xl mx-auto">
-      LEEG
-    </p>
+<!-- LEFT LARGE VIDEO -->
 
-  </div>
+<div>
+
+<video
+id="demo-video"
+class="w-full rounded-lg shadow-lg cursor-pointer"
+muted
+playsinline
+controls="false"
+preload="auto"
+>
+
+<source src="06_videos/demovoorbeeld.mp4" type="video/mp4">
+
+</video>
+
+</div>
+
+
+<!-- RIGHT COLUMN -->
+
+<div class="flex flex-col gap-6">
+
+
+<!-- SMALL IMAGE -->
+
+<img
+src="05_images/industry5.png"
+class="w-full rounded-lg shadow-md"
+/>
+
+
+<!-- TEXT BLOCK -->
+
+<div>
+
+<p class="text-sm text-gray-400 mb-2">
+Demo
+</p>
+
+<h2 class="text-3xl font-semibold mb-4">
+Detecteer randvalrisico’s
+</h2>
+
+<p class="text-lg text-gray-600 mb-4">
+Industry 5.0
+</p>
+
+
+<!-- TAGS -->
+
+<div class="flex gap-4 text-sm text-gray-400">
+
+<span>IFC</span>
+<span>Safety</span>
+<span>BIM</span>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
 
 </section>
 
@@ -324,13 +381,12 @@ In het samenwerkingsverband van het projectteam, kunnen project specifieke afweg
   <div data-aos="fade-up">
 
     <h2 class="text-5xl font-semibold mb-6">
-      Voor wie is EdgeProtector
+      DEMO
     </h2>
 
     <div class="text-xl text-gray-600 space-y-4">
 
-      <p>BIM</p>
-      <p>Aannemers</p>
+      <p>LEEG</p>>
 
     </div>
 
@@ -349,7 +405,7 @@ In het samenwerkingsverband van het projectteam, kunnen project specifieke afweg
 
     <a href="https://github.com/BIMHARB-J/voorbereid-op-valveiligheid"
        class="bg-black text-white px-10 py-5 rounded-xl text-lg">
-      Bekijk het project
+      Bekijk github
     </a>
 
   </div>
@@ -463,6 +519,32 @@ window.addEventListener("DOMContentLoaded", () => {
 
   monitor.style.transform =
   `translate(-50%, ${progress * 300}px)`;
+
+  });
+
+  const video = document.getElementById("demo-video");
+
+  video.addEventListener("loadeddata", () => {
+
+  video.play();
+
+  });
+
+
+  video.addEventListener("ended", () => {
+
+  video.currentTime = 0;
+
+  video.pause();
+
+  });
+
+
+  video.addEventListener("click", () => {
+
+  video.currentTime = 0;
+
+  video.play();
 
   });
 
