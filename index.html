@@ -144,7 +144,7 @@ Demo
 </header>
 
 <!-- HERO -->
-<section class="h-screen flex items-center justify-center text-center px-6">
+<section class="relative h-[110vh] flex items-center justify-center text-center px-6 bg-gray-100">
 
   <div data-aos="fade-up">
 
@@ -163,10 +163,20 @@ Demo
 
   </div>
 
+  <div class="absolute bottom-[-140px] left-1/2 -translate-x-1/2 z-20">
+
+  <img
+  id="hero-monitor"
+  src="05_images/EdgeProtectorintrimblenbg.png"
+  class="w-[900px] max-w-[90vw] shadow-2xl rounded-xl"
+  >
+
+  </div>
+
 </section>
 
 <!-- PROBLEEM -->
-<section class="py-40 bg-gray-50 text-center px-6">
+<section class="pt-[220px] pb-40 bg-white text-center px-6">
 
   <div data-aos="fade-up">
 
@@ -418,6 +428,17 @@ window.addEventListener("DOMContentLoaded", () => {
   lastScroll = currentScroll;
 
   });
+
+  const heroImage = document.querySelector("#hero-monitor");
+
+  window.addEventListener("scroll", () => {
+
+  const scroll = window.scrollY;
+
+  heroImage.style.transform =
+  `translate(-50%, ${scroll * 0.15}px)`;
+
+  }); 
 
   AOS.init();
 
