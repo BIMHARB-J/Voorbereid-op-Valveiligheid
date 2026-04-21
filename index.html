@@ -88,19 +88,17 @@ p {
 
 #floating-monitor {
 
-position: sticky;
-top: 140px;
+position: absolute;
+top: 60vh;
 
-display: flex;
-justify-content: center;
+left: 50%;
+transform: translateX(-50%);
 
-pointer-events: none;
 z-index: 40;
 
-margin-top: -35vh;
+pointer-events: none;
 
 }
-
 
 #hero-monitor {
 
@@ -124,15 +122,6 @@ bg-white shadow-sm
 transition-transform duration-300">
 
 <div class="relative h-20">
-
-<!-- FLOATING MONITOR LAYER -->
-
-<div id="floating-monitor">
-
-<img
-id="hero-monitor"
-src="05_images/EdgeProtectorintrimblenbg.png"
-/>
 
 </div>
 
@@ -179,10 +168,19 @@ Demo
 </div>
 </header>
 
+<div id="floating-monitor">
+
+<img
+id="hero-monitor"
+src="05_images/EdgeProtectorintrimblenbg.png"
+/>
+
+</div>
+
 <!-- HERO -->
 <section
 id="hero"
-class="relative h-[120vh] bg-gray-100 flex flex-col items-center text-center pt-40"
+class="relative h-[140vh] bg-gray-100 flex flex-col items-center text-center pt-40 overflow-visible"
 >
 
 <div id="hero-text" class="relative z-30">
@@ -467,6 +465,23 @@ window.addEventListener("DOMContentLoaded", () => {
 
   heroText.style.transform =
   `translateY(${progress * -200}px)`;
+
+  });
+
+  const monitor = document.getElementById("floating-monitor");
+  const heroSection = document.getElementById("hero");
+
+  window.addEventListener("scroll", () => {
+
+  const rect = heroSection.getBoundingClientRect();
+
+  const progress = Math.min(
+  Math.max(-rect.top / window.innerHeight, 0),
+  1
+  );
+
+  monitor.style.transform =
+  `translate(-50%, ${progress * 300}px)`;
 
   });
 
