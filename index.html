@@ -94,7 +94,7 @@ top: 46vh;
 left: 50%;
 transform: translateX(-50%);
 
-z-index: 40;
+z-index: 30;
 
 pointer-events: none;
 
@@ -183,7 +183,8 @@ id="hero"
 class="relative h-[130vh] bg-gray-100 flex flex-col items-center text-center pt-40 overflow-visible"
 >
 
-<div id="hero-text" class="relative z-30">
+<div id="hero-text"
+class="sticky top-[32vh] z-10">
 
 <h1 class="text-6xl font-bold mb-6">
 EdgeProtector
@@ -198,7 +199,7 @@ Scan randvalgevaren direct in IFC-modellen en maak veiligheid onderdeel van de v
 </section>
 
 <!-- PROBLEEM -->
-<section class="pt-[24rem] pb-40 text-center px-6">
+<section class="relative z-40 bg-white pt-[24rem] pb-40 text-center px-6">
 
   <div data-aos="fade-up">
 
@@ -476,23 +477,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   lastScroll = currentScroll;
-
-  });
-
-  const hero = document.getElementById("hero");
-  const heroText = document.getElementById("hero-text");
-
-  window.addEventListener("scroll", () => {
-
-  const rect = hero.getBoundingClientRect();
-
-  const progress = Math.min(
-  Math.max(-rect.top / window.innerHeight, 0),
-  1
-  );
-
-  heroText.style.transform =
-  `translateY(${progress * -200}px)`;
 
   });
 
