@@ -355,7 +355,7 @@
     </div>
 
     <!-- ⚠ TESTSCRIPT BANNER BOVEN -->
-    <div class="test-banner">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner">⚠ &nbsp;DEZE STAP DIEN VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <!-- Stap 2: Script uitvoeren -->
     <div class="step" id="step2">
@@ -377,7 +377,7 @@
 
     <!-- Stap 3: IFC genereren & tonen -->
     <!-- ⚠ TESTSCRIPT BANNER ONDER -->
-    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIP — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
     <div class="step" id="step3">
         <div class="step-header">
             <div class="step-num">3</div>
@@ -471,13 +471,25 @@
                 window.parent,
                 (event, data) => {
                     log(`Event: ${event}`, '');
+                    // Token bijhouden zodra hij binnenkomt of ververst wordt
+                    if (event === 'extension.accessToken' && data && typeof data === 'string'
+                        && data !== 'pending' && data !== 'denied') {
+                        accessToken = data;
+                        log('Access token bijgewerkt via event ✓', 'ok');
+                    }
                 }
             );
 
             log('Verbonden ✓', 'ok');
             log('Access token aanvragen...', 'info');
 
-            await API.extension.requestPermission('accesstoken');
+            log('Access token aanvragen...', 'info');
+            const tokenResult = await API.extension.requestPermission('accesstoken');
+            // requestPermission geeft het token terug als consent al gegeven is,
+            // anders 'pending' of 'denied'
+            if (tokenResult && tokenResult !== 'pending' && tokenResult !== 'denied') {
+                accessToken = tokenResult;
+            }
             log('Permissie verkregen ✓', 'ok');
 
             // Huidig geselecteerd / actief model in de viewer
@@ -541,30 +553,96 @@
         }
     }
 
+    // ── REST API helper: regio-URL + access token ophalen ─────
+    // De Workspace API heeft geen file-methodes. Bestandsbeheer gaat
+    // via de Trimble Connect Core REST API met het access token.
+    let accessToken = null;
+    let regionBase  = null;  // bijv. "https://app.connect.trimble.com/tc/api/2.0"
+
+    async function ensureRestReady() {
+        if (accessToken && regionBase) return;
+
+        // Token ophalen — requestPermission geeft het token terug als string
+        // zodra de gebruiker toestemming heeft gegeven (stap 1 doet dit al).
+        accessToken = await API.extension.requestPermission('accesstoken');
+        if (!accessToken || accessToken === 'pending' || accessToken === 'denied') {
+            throw new Error(`Access token niet beschikbaar (status: ${accessToken}). Geef toestemming in de extensie-instellingen.`);
+        }
+
+        // Project-info ophalen om de regio te bepalen
+        const project = await API.project.getProject();
+        log(`Project regio: ${project.location || 'onbekend'}`, 'info');
+
+        // Regio naar base-URL vertalen (EU = europa endpoint)
+        const loc = (project.location || '').toLowerCase();
+        if (loc.includes('europe') || loc === 'eu') {
+            regionBase = 'https://europe.connect.trimble.com/tc/api/2.0';
+        } else if (loc.includes('asia') || loc === 'ap') {
+            regionBase = 'https://asia.connect.trimble.com/tc/api/2.0';
+        } else {
+            regionBase = 'https://app.connect.trimble.com/tc/api/2.0';
+        }
+        log(`REST basis-URL: ${regionBase}`, 'info');
+    }
+
+    async function restGet(path) {
+        const r = await fetch(`${regionBase}${path}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!r.ok) throw new Error(`GET ${path} → HTTP ${r.status}`);
+        return r.json();
+    }
+
+    async function restGetBinary(path) {
+        const r = await fetch(`${regionBase}${path}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (!r.ok) throw new Error(`GET (binary) ${path} → HTTP ${r.status}`);
+        return r.arrayBuffer();
+    }
+
     // ── Huidig actief model ophalen ───────────────────────────
-    // Trimble Connect biedt viewer.getModels() om geladen modellen te zien.
-    // We pakken de eerste (actieve) of de geselecteerde.
     async function getActiveModel() {
-        // Probeer eerst via viewer API (modellen in de 3D view)
+        await ensureRestReady();
+
+        // 1. Probeer viewer API (geeft modelId terug)
+        let modelFileId = null;
         try {
             const viewer = await API.viewer;
             const models = await viewer.getModels();
             if (models && models.length > 0) {
-                // Eerste model = het primaire / actief geladen model
-                return models[0];
+                // models[0].modelId of models[0].id — afhankelijk van versie
+                modelFileId = models[0].modelId || models[0].id;
+                log(`Viewer meldt model id: ${modelFileId}`, 'info');
             }
         } catch (e) {
             log(`viewer.getModels niet beschikbaar: ${e.message}`, 'warn');
         }
 
-        // Fallback: via project files API
+        // 2. Project ophalen voor projectId
         const project = await API.project.getProject();
-        const files   = await API.files.getFiles();
+        const projectId = project.id;
+        log(`Project id: ${projectId}`, 'info');
+
+        if (modelFileId) {
+            // Bestandsinfo ophalen via REST
+            try {
+                const info = await restGet(`/projects/${projectId}/files/${modelFileId}`);
+                return info;
+            } catch (e) {
+                log(`Bestandsinfo via id mislukt: ${e.message}`, 'warn');
+            }
+        }
+
+        // 3. Fallback: zoek eerste IFC in project root
+        const filesResp = await restGet(`/projects/${projectId}/files`);
+        const files = filesResp.list || filesResp.files || filesResp;
         const ifcFile = files.find(f =>
             f.name && (f.name.toLowerCase().endsWith('.ifc') ||
                        f.name.toLowerCase().endsWith('.ifczip'))
         );
-        if (!ifcFile) throw new Error('Geen IFC model gevonden in dit project.');
+        if (!ifcFile) throw new Error('Geen IFC bestand gevonden in het project.');
+        log(`Fallback: eerste IFC gevonden: ${ifcFile.name}`, 'warn');
         return ifcFile;
     }
 
@@ -574,41 +652,37 @@
     // ║   singen, puur om de upload/overlay pipeline te testen.  ║
     // ╚══════════════════════════════════════════════════════════╝
     async function runFallProtectionScript(model, onProgress) {
-
-        onProgress(5, '[TEST] Bronbestand downloaden...');
+        onProgress(5, '[TEST] Bronbestand downloaden via REST API...');
         log('⚠ TESTSCRIPT actief — dupliceert bestand zonder verwerking', 'warn');
 
-        // Bronbestand downloaden als ArrayBuffer via Trimble Files API
-        let sourceBytes;
-        try {
-            const download = await API.files.getFileContent(model.id);
-            // getFileContent geeft een ArrayBuffer of Blob terug, afhankelijk van versie
-            if (download instanceof ArrayBuffer) {
-                sourceBytes = download;
-            } else if (download instanceof Blob) {
-                sourceBytes = await download.arrayBuffer();
-            } else {
-                throw new Error('Onverwacht download formaat: ' + typeof download);
-            }
-        } catch (e) {
-            log(`Download via API mislukt (${e.message}), fallback naar fetch...`, 'warn');
-            // Fallback: download URL ophalen en fetchen
-            const url = await API.files.getFileDownloadUrl(model.id);
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`Download mislukt: HTTP ${resp.status}`);
-            sourceBytes = await resp.arrayBuffer();
-        }
+        await ensureRestReady();
+        const project = await API.project.getProject();
 
-        onProgress(40, '[TEST] Bestand ontvangen, "verwerking" simuleren...');
-        await delay(600);
-        onProgress(70, '[TEST] Duplicaat klaarmaken...');
+        // Download het bronbestand via de Core REST API
+        // Endpoint: GET /projects/{projectId}/files/{fileId}/versions/latest/downloadlink
+        // → geeft een tijdelijke download-URL terug
+        const dlResp = await restGet(
+            `/projects/${project.id}/files/${model.id}/versions/latest/downloadlink`
+        );
+
+        const downloadUrl = dlResp.url || dlResp.downloadUrl || dlResp;
+        log(`Download-URL verkregen ✓`, 'ok');
+        onProgress(20, '[TEST] Bestand ophalen...');
+
+        const resp = await fetch(downloadUrl);
+        if (!resp.ok) throw new Error(`Bestand download mislukt: HTTP ${resp.status}`);
+        const sourceBytes = await resp.arrayBuffer();
+
+        log(`Bestand ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
+        onProgress(50, '[TEST] Bestand ontvangen, "verwerking" simuleren...');
+        await delay(500);
+        onProgress(75, '[TEST] Duplicaat klaarmaken...');
         await delay(400);
-        onProgress(90, '[TEST] Afronden...');
+        onProgress(95, '[TEST] Afronden...');
         await delay(300);
         onProgress(100, '[TEST] Klaar — bestand is ongewijzigd gedupliceerd ✓');
 
         log('⚠ Geen valgevaar-analyse uitgevoerd — enkel duplicaat', 'warn');
-
         return new Blob([sourceBytes], { type: 'application/octet-stream' });
     }
     // ╔══════════════════════════════════════════════════════════╗
@@ -617,31 +691,50 @@
 
     // ── IFC uploaden naar project & tonen in viewer ───────────
     async function uploadAndShowIfc(blob, sourceModel) {
+        await ensureRestReady();
+        const project  = await API.project.getProject();
         const outputName = (sourceModel.name || 'model').replace(/\.ifc(zip)?$/i, '') + '_valgevaren.ifc';
 
-        // Bestand uploaden naar Trimble Connect project
-        const uploadedFile = await API.files.uploadFile({
-            name: outputName,
-            data: blob,
-            parentId: sourceModel.parentId || null   // zelfde map als bronmodel
+        // Stap A: upload-sessie aanmaken (multipart of via upload-link)
+        // De Core REST API v2 gebruikt POST /projects/{id}/files voor upload
+        log(`Bestand uploaden als: ${outputName}`, 'info');
+
+        const formData = new FormData();
+        formData.append('name', outputName);
+        formData.append('parentId', sourceModel.parentId || '');
+        formData.append('data', blob, outputName);
+
+        const uploadResp = await fetch(`${regionBase}/projects/${project.id}/files`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+            body: formData
         });
 
-        log(`Bestand geüpload: ${outputName} (id: ${uploadedFile.id})`, 'ok');
+        if (!uploadResp.ok) {
+            const errText = await uploadResp.text();
+            throw new Error(`Upload mislukt: HTTP ${uploadResp.status} — ${errText}`);
+        }
 
-        // Model toevoegen aan de huidige viewer sessie (overlay)
+        const uploadedFile = await uploadResp.json();
+        log(`Bestand geüpload ✓ (id: ${uploadedFile.id})`, 'ok');
+
+        // Stap B: model toevoegen aan viewer als overlay
+        const fileId = uploadedFile.id;
         try {
             const viewer = await API.viewer;
-            await viewer.loadModel(uploadedFile.id);
-            log('Model toegevoegd aan viewer ✓', 'ok');
-        } catch (e) {
-            log(`viewer.loadModel niet beschikbaar, probeer alternatief...`, 'warn');
-            // Alternatief: navigeer viewer naar het bestand
+
+            // Probeer addModel (nieuwere API)
             try {
-                await API.viewer.addModel({ modelId: uploadedFile.id });
-            } catch (e2) {
-                log(`Overlay via API niet mogelijk: ${e2.message}`, 'warn');
-                log('Bestand staat wel in het project, open het handmatig als overlay.', 'warn');
+                await viewer.addModel({ modelId: fileId });
+                log('Overlay geladen via viewer.addModel ✓', 'ok');
+            } catch {
+                // Fallback: loadModel
+                await viewer.loadModel(fileId);
+                log('Overlay geladen via viewer.loadModel ✓', 'ok');
             }
+        } catch (e) {
+            log(`Viewer overlay API niet beschikbaar: ${e.message}`, 'warn');
+            log('Het bestand staat in het project — open het handmatig als overlay.', 'warn');
         }
 
         return uploadedFile;
