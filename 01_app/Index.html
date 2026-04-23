@@ -3,122 +3,689 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>project naam fetch</title>
+    <title>EdgeProtector</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+        :root {
+            --bg: #0d0f14;
+            --surface: #161a22;
+            --border: #252b38;
+            --accent: #00c8ff;
+            --accent2: #ff6b35;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
             padding: 20px;
+            font-size: 14px;
         }
-        .container {
-            border: 1px solid #ddd;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
         }
-        button {
-            background-color: #0066cc;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 16px;
+
+        .logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 600;
+            font-size: 14px;
+            color: #000;
+            flex-shrink: 0;
         }
-        button:hover {
-            background-color: #0052a3;
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
         }
-        .result {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-radius: 3px;
+
+        header span {
+            font-size: 11px;
+            color: var(--muted);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        /* ── STAP KAARTEN ── */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .step {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .step.active { border-color: var(--accent); }
+        .step.done   { border-color: var(--success); }
+        .step.error  { border-color: var(--error); }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .step-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            flex-shrink: 0;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .step.active .step-num  { background: var(--accent); color: #000; }
+        .step.done   .step-num  { background: var(--success); color: #000; }
+        .step.error  .step-num  { background: var(--error); color: #fff; }
+
+        .step-title {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .step-body {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.6;
+            padding-left: 34px;
+        }
+
+        .step-body.visible { color: var(--text); }
+
+        /* Model info blokje */
+        .model-info {
+            background: rgba(0,200,255,0.06);
+            border: 1px solid rgba(0,200,255,0.2);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-top: 8px;
+            display: none;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            line-height: 1.8;
+        }
+
+        .model-info.show { display: block; }
+
+        .model-info .label {
+            color: var(--muted);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .model-info .value {
+            color: var(--accent);
+        }
+
+        /* Progress bar */
+        .progress-wrap {
+            margin-top: 10px;
             display: none;
         }
-        .result.show {
-            display: block;
+
+        .progress-wrap.show { display: block; }
+
+        .progress-bar {
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
         }
-        .error {
-            color: #d32f2f;
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            width: 0%;
+            transition: width 0.4s ease;
+            border-radius: 2px;
         }
-        .success {
-            color: #388e3c;
+
+        .progress-fill.indeterminate {
+            width: 40%;
+            animation: slide 1.2s ease-in-out infinite;
         }
-        .loading {
-            color: #1976d2;
+
+        @keyframes slide {
+            0%   { transform: translateX(-150%); }
+            100% { transform: translateX(350%); }
         }
+
+        .progress-label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 4px;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        /* Hoofdknop */
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: opacity 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover:not(:disabled) { opacity: 0.85; }
+        .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 400;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: border-color 0.2s;
+        }
+
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+        .test-banner {
+            background: rgba(245,158,11,0.08);
+            border: 1px dashed var(--warning);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-family: 'IBM Plex Mono', monospace;
+            color: var(--warning);
+            line-height: 1.6;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        /* Log console */
+        .log {
+            background: #08090c;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-top: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            line-height: 1.7;
+            display: none;
+        }
+
+        .log.show { display: block; }
+
+        .log-line { color: var(--muted); }
+        .log-line.ok   { color: var(--success); }
+        .log-line.err  { color: var(--error); }
+        .log-line.info { color: var(--accent); }
+        .log-line.warn { color: var(--warning); }
+
+        /* Status badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-family: 'IBM Plex Mono', monospace;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: auto;
+        }
+
+        .badge.idle    { background: rgba(100,116,139,0.15); color: var(--muted); }
+        .badge.running { background: rgba(0,200,255,0.12); color: var(--accent); }
+        .badge.ok      { background: rgba(34,197,94,0.12); color: var(--success); }
+        .badge.fail    { background: rgba(239,68,68,0.12); color: var(--error); }
+
+        .dot {
+            width: 5px; height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .dot.pulse { animation: pulse 1s ease-in-out infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.2; }
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 16px 0;
+        }
+
+        /* Result IFC info */
+        .ifc-result {
+            background: rgba(34,197,94,0.06);
+            border: 1px solid rgba(34,197,94,0.2);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-top: 8px;
+            display: none;
+            font-size: 12px;
+        }
+
+        .ifc-result.show { display: block; }
+
+        .ifc-result strong { color: var(--success); }
     </style>
 </head>
 <body>
-    <div class="container">
+
+<header>
+    <div class="logo">EP</div>
+    <div>
         <h1>EdgeProtector</h1>
-        
-        <button onclick="fetchProjectName()">Scan valgevaren</button>
-        
-        <div id="result" class="result">
-            <p id="message"></p>
+        <span>IFC Valgevaar Analyse</span>
+    </div>
+</header>
+
+<div class="steps">
+
+    <!-- Stap 1: Model laden -->
+    <div class="step" id="step1">
+        <div class="step-header">
+            <div class="step-num">1</div>
+            <span class="step-title">Huidig model ophalen</span>
+            <span class="badge idle" id="badge1"><span class="dot"></span>wacht</span>
+        </div>
+        <div class="step-body" id="body1">
+            Verbinding maken met de 3D viewer en het actieve IFC model ophalen.
+        </div>
+        <div class="model-info" id="modelInfo">
+            <div class="label">Model naam</div>
+            <div class="value" id="infoName">—</div>
+            <div class="label" style="margin-top:6px">Model ID</div>
+            <div class="value" id="infoId">—</div>
+            <div class="label" style="margin-top:6px">Bestandsgrootte</div>
+            <div class="value" id="infoSize">—</div>
         </div>
     </div>
 
-    <!-- Trimble Connect Workspace API Script -->
-    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
-    
-    <script>
-        async function fetchProjectName() {
-            const resultDiv = document.getElementById('result');
-            const messageDiv = document.getElementById('message');
-            
-            try {
-                // Status bijwerken
-                resultDiv.classList.add('show');
-                messageDiv.className = 'loading';
-                messageDiv.textContent = 'Project naam ophalen...';
-                
-                // Verbinding maken met Trimble Connect API
-                // Voor extensies: window.parent gebruiken
-                // Voor embedded components: het iframe element gebruiken
-                const API = await TrimbleConnectWorkspace.connect(
-                    window.parent,
-                    (event, data) => {
-                        console.log('Event:', event, data);
-                        
-                        // Luisteren naar token events (voor extensies)
-                        if (event === 'extension.accessToken') {
-                            console.log('Access Token Status:', data);
-                        }
-                    }
-                );
-                
-                // Request permission voor access token (belangrijk voor extensies)
-                const tokenStatus = await API.extension.requestPermission('accesstoken');
-                console.log('Token Status:', tokenStatus);
-                
-                // Project informatie ophalen
-                const project = await API.project.getProject();
-                
-                if (project && project.name) {
-                    messageDiv.className = 'success';
-                    messageDiv.innerHTML = `
-                        <strong>Project Naam:</strong> ${project.name}<br>
-                        <strong>Project ID:</strong> ${project.id || 'N/A'}<br>
-                        <strong>Project Beschrijving:</strong> ${project.description || 'N/A'}
-                    `;
-                } else {
-                    messageDiv.className = 'error';
-                    messageDiv.textContent = 'Geen project informatie gevonden.';
+    <!-- ⚠ TESTSCRIPT BANNER BOVEN -->
+    <div class="test-banner">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+
+    <!-- Stap 2: Script uitvoeren -->
+    <div class="step" id="step2">
+        <div class="step-header">
+            <div class="step-num">2</div>
+            <span class="step-title">Valgevaar script uitvoeren</span>
+            <span class="badge idle" id="badge2"><span class="dot"></span>wacht</span>
+        </div>
+        <div class="step-body" id="body2">
+            Het analyse-script wordt uitgevoerd op het geladen model. Valgevaren worden gedetecteerd en verwerkt.
+        </div>
+        <div class="progress-wrap" id="progressWrap">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-label" id="progressLabel">Initialiseren...</div>
+        </div>
+    </div>
+
+    <!-- Stap 3: IFC genereren & tonen -->
+    <!-- ⚠ TESTSCRIPT BANNER ONDER -->
+    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="step" id="step3">
+        <div class="step-header">
+            <div class="step-num">3</div>
+            <span class="step-title">IFC overlay laden in viewer</span>
+            <span class="badge idle" id="badge3"><span class="dot"></span>wacht</span>
+        </div>
+        <div class="step-body" id="body3">
+            Het gegenereerde IFC bestand met valgevaar-elementen wordt als overlay boven op het originele model geladen.
+        </div>
+        <div class="ifc-result" id="ifcResult">
+            <strong>✓ Overlay geladen</strong><br>
+            <span id="ifcResultText"></span>
+        </div>
+    </div>
+
+</div>
+
+<div class="log" id="log"></div>
+
+<button class="btn-primary" id="btnStart" onclick="startPipeline()">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Starten
+</button>
+
+<button class="btn-secondary" id="btnReset" onclick="resetUI()" style="display:none">Opnieuw</button>
+
+<!-- Trimble Connect Workspace API -->
+<script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+
+<script>
+    let API = null;
+    let currentModel = null;
+    let running = false;
+
+    // ── Logging ──────────────────────────────────────────────
+    function log(msg, type = '') {
+        const el = document.getElementById('log');
+        el.classList.add('show');
+        const line = document.createElement('div');
+        line.className = `log-line ${type}`;
+        const ts = new Date().toLocaleTimeString('nl-NL', { hour12: false });
+        line.textContent = `[${ts}] ${msg}`;
+        el.appendChild(line);
+        el.scrollTop = el.scrollHeight;
+    }
+
+    // ── Stap status helpers ───────────────────────────────────
+    function setStep(n, state) {
+        const step  = document.getElementById(`step${n}`);
+        const badge = document.getElementById(`badge${n}`);
+        const body  = document.getElementById(`body${n}`);
+        step.className = `step ${state === 'active' ? 'active' : state === 'done' ? 'done' : state === 'error' ? 'error' : ''}`;
+
+        const labels = { idle: 'wacht', active: 'bezig', done: 'klaar', error: 'fout' };
+        const cls    = { idle: 'idle', active: 'running', done: 'ok', error: 'fail' };
+        badge.className = `badge ${cls[state]}`;
+        badge.innerHTML = `<span class="dot ${state === 'active' ? 'pulse' : ''}"></span>${labels[state]}`;
+
+        body.className = `step-body${state !== 'idle' ? ' visible' : ''}`;
+    }
+
+    // ── Progress helpers ──────────────────────────────────────
+    function showProgress(indeterminate = true, pct = 0, label = '') {
+        document.getElementById('progressWrap').classList.add('show');
+        const fill = document.getElementById('progressFill');
+        if (indeterminate) {
+            fill.className = 'progress-fill indeterminate';
+        } else {
+            fill.className = 'progress-fill';
+            fill.style.width = pct + '%';
+        }
+        if (label) document.getElementById('progressLabel').textContent = label;
+    }
+
+    function hideProgress() {
+        document.getElementById('progressWrap').classList.remove('show');
+    }
+
+    // ── Hoofd pipeline ────────────────────────────────────────
+    async function startPipeline() {
+        if (running) return;
+        running = true;
+        document.getElementById('btnStart').disabled = true;
+
+        try {
+            // ── STAP 1: Verbinden & model ophalen ──
+            setStep(1, 'active');
+            log('Verbinden met Trimble Connect Workspace API...', 'info');
+
+            API = await TrimbleConnectWorkspace.connect(
+                window.parent,
+                (event, data) => {
+                    log(`Event: ${event}`, '');
                 }
-                
-            } catch (error) {
-                resultDiv.classList.add('show');
-                messageDiv.className = 'error';
-                messageDiv.innerHTML = `
-                    <strong>Fout:</strong> ${error.message}<br>
-                    <small>Zorg ervoor dat deze pagina is ingebed als een Trimble Connect extensie.</small>
-                `;
-                console.error('Error:', error);
+            );
+
+            log('Verbonden ✓', 'ok');
+            log('Access token aanvragen...', 'info');
+
+            await API.extension.requestPermission('accesstoken');
+            log('Permissie verkregen ✓', 'ok');
+
+            // Huidig geselecteerd / actief model in de viewer
+            log('Actief model ophalen uit viewer...', 'info');
+            currentModel = await getActiveModel();
+
+            document.getElementById('infoName').textContent = currentModel.name || 'Onbekend';
+            document.getElementById('infoId').textContent   = currentModel.id   || 'Onbekend';
+            document.getElementById('infoSize').textContent = currentModel.fileSize
+                ? formatBytes(currentModel.fileSize) : 'N/A';
+            document.getElementById('modelInfo').classList.add('show');
+
+            log(`Model gevonden: ${currentModel.name}`, 'ok');
+            setStep(1, 'done');
+
+            // ── STAP 2: Script uitvoeren ──
+            setStep(2, 'active');
+            log('Valgevaar analyse starten...', 'info');
+            showProgress(true, 0, 'Model inladen...');
+
+            const generatedIfcBlob = await runFallProtectionScript(currentModel, (pct, msg) => {
+                showProgress(false, pct, msg);
+                log(msg);
+            });
+
+            hideProgress();
+            log('Script uitgevoerd ✓', 'ok');
+            setStep(2, 'done');
+
+            // ── STAP 3: IFC uploaden & tonen in viewer ──
+            setStep(3, 'active');
+            log('Gegenereerd IFC bestand uploaden...', 'info');
+
+            const overlayModel = await uploadAndShowIfc(generatedIfcBlob, currentModel);
+
+            document.getElementById('ifcResultText').textContent =
+                `"${overlayModel.name}" is geladen als overlay (${formatBytes(generatedIfcBlob.size)})`;
+            document.getElementById('ifcResult').classList.add('show');
+
+            log(`Overlay geladen: ${overlayModel.name}`, 'ok');
+            setStep(3, 'done');
+
+            document.getElementById('btnReset').style.display = 'block';
+            document.getElementById('btnStart').style.display = 'none';
+
+        } catch (err) {
+            log(`Fout: ${err.message}`, 'err');
+            console.error(err);
+
+            // Markeer de lopende stap als fout
+            ['step1','step2','step3'].forEach(id => {
+                if (document.getElementById(id).classList.contains('active')) {
+                    const n = id.replace('step','');
+                    setStep(n, 'error');
+                }
+            });
+
+            document.getElementById('btnStart').disabled = false;
+        } finally {
+            running = false;
+        }
+    }
+
+    // ── Huidig actief model ophalen ───────────────────────────
+    // Trimble Connect biedt viewer.getModels() om geladen modellen te zien.
+    // We pakken de eerste (actieve) of de geselecteerde.
+    async function getActiveModel() {
+        // Probeer eerst via viewer API (modellen in de 3D view)
+        try {
+            const viewer = await API.viewer;
+            const models = await viewer.getModels();
+            if (models && models.length > 0) {
+                // Eerste model = het primaire / actief geladen model
+                return models[0];
+            }
+        } catch (e) {
+            log(`viewer.getModels niet beschikbaar: ${e.message}`, 'warn');
+        }
+
+        // Fallback: via project files API
+        const project = await API.project.getProject();
+        const files   = await API.files.getFiles();
+        const ifcFile = files.find(f =>
+            f.name && (f.name.toLowerCase().endsWith('.ifc') ||
+                       f.name.toLowerCase().endsWith('.ifczip'))
+        );
+        if (!ifcFile) throw new Error('Geen IFC model gevonden in dit project.');
+        return ifcFile;
+    }
+
+    // ╔══════════════════════════════════════════════════════════╗
+    // ║   ⚠  TIJDELIJK TESTSCRIPT — DIENT VERVANGEN TE WORDEN   ║
+    // ║   Dit script dupliceert het bronbestand zonder aanpas-   ║
+    // ║   singen, puur om de upload/overlay pipeline te testen.  ║
+    // ╚══════════════════════════════════════════════════════════╝
+    async function runFallProtectionScript(model, onProgress) {
+
+        onProgress(5, '[TEST] Bronbestand downloaden...');
+        log('⚠ TESTSCRIPT actief — dupliceert bestand zonder verwerking', 'warn');
+
+        // Bronbestand downloaden als ArrayBuffer via Trimble Files API
+        let sourceBytes;
+        try {
+            const download = await API.files.getFileContent(model.id);
+            // getFileContent geeft een ArrayBuffer of Blob terug, afhankelijk van versie
+            if (download instanceof ArrayBuffer) {
+                sourceBytes = download;
+            } else if (download instanceof Blob) {
+                sourceBytes = await download.arrayBuffer();
+            } else {
+                throw new Error('Onverwacht download formaat: ' + typeof download);
+            }
+        } catch (e) {
+            log(`Download via API mislukt (${e.message}), fallback naar fetch...`, 'warn');
+            // Fallback: download URL ophalen en fetchen
+            const url = await API.files.getFileDownloadUrl(model.id);
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`Download mislukt: HTTP ${resp.status}`);
+            sourceBytes = await resp.arrayBuffer();
+        }
+
+        onProgress(40, '[TEST] Bestand ontvangen, "verwerking" simuleren...');
+        await delay(600);
+        onProgress(70, '[TEST] Duplicaat klaarmaken...');
+        await delay(400);
+        onProgress(90, '[TEST] Afronden...');
+        await delay(300);
+        onProgress(100, '[TEST] Klaar — bestand is ongewijzigd gedupliceerd ✓');
+
+        log('⚠ Geen valgevaar-analyse uitgevoerd — enkel duplicaat', 'warn');
+
+        return new Blob([sourceBytes], { type: 'application/octet-stream' });
+    }
+    // ╔══════════════════════════════════════════════════════════╗
+    // ║   ⚠  EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN       ║
+    // ╚══════════════════════════════════════════════════════════╝
+
+    // ── IFC uploaden naar project & tonen in viewer ───────────
+    async function uploadAndShowIfc(blob, sourceModel) {
+        const outputName = (sourceModel.name || 'model').replace(/\.ifc(zip)?$/i, '') + '_valgevaren.ifc';
+
+        // Bestand uploaden naar Trimble Connect project
+        const uploadedFile = await API.files.uploadFile({
+            name: outputName,
+            data: blob,
+            parentId: sourceModel.parentId || null   // zelfde map als bronmodel
+        });
+
+        log(`Bestand geüpload: ${outputName} (id: ${uploadedFile.id})`, 'ok');
+
+        // Model toevoegen aan de huidige viewer sessie (overlay)
+        try {
+            const viewer = await API.viewer;
+            await viewer.loadModel(uploadedFile.id);
+            log('Model toegevoegd aan viewer ✓', 'ok');
+        } catch (e) {
+            log(`viewer.loadModel niet beschikbaar, probeer alternatief...`, 'warn');
+            // Alternatief: navigeer viewer naar het bestand
+            try {
+                await API.viewer.addModel({ modelId: uploadedFile.id });
+            } catch (e2) {
+                log(`Overlay via API niet mogelijk: ${e2.message}`, 'warn');
+                log('Bestand staat wel in het project, open het handmatig als overlay.', 'warn');
             }
         }
-    </script>
+
+        return uploadedFile;
+    }
+
+    // ── Hulpfuncties ──────────────────────────────────────────
+    function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function formatBytes(b) {
+        if (!b) return '?';
+        if (b < 1024)       return b + ' B';
+        if (b < 1048576)    return (b/1024).toFixed(1) + ' KB';
+        return (b/1048576).toFixed(1) + ' MB';
+    }
+
+    // Minimale geldige IFC placeholder (voor testdoeleinden)
+    function generatePlaceholderIfc(name) {
+        const ts = new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+        return `ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Valgevaar overlay gegenereerd door EdgeProtector'),'2;1');
+FILE_NAME('${name}_valgevaren.ifc','${new Date().toISOString()}',('EdgeProtector'),('Anthropic'),'','EdgeProtector 1.0','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+/* TODO: gegenereerde IFC entiteiten van het valgevaar script */
+ENDSEC;
+END-ISO-10303-21;`;
+    }
+
+    function resetUI() {
+        [1,2,3].forEach(n => setStep(n, 'idle'));
+        document.getElementById('modelInfo').classList.remove('show');
+        document.getElementById('progressWrap').classList.remove('show');
+        document.getElementById('ifcResult').classList.remove('show');
+        document.getElementById('log').innerHTML = '';
+        document.getElementById('log').classList.remove('show');
+        document.getElementById('btnReset').style.display = 'none';
+        document.getElementById('btnStart').style.display = 'flex';
+        document.getElementById('btnStart').disabled = false;
+        currentModel = null;
+        running = false;
+    }
+</script>
+
 </body>
 </html>
