@@ -575,16 +575,38 @@
     async function ensureRestReady() {
         if (accessToken && regionBase) return;
 
+        // 1. Token
         if (!accessToken) {
             const tokenResult = await API.extension.requestPermission('accesstoken');
             if (!tokenResult || tokenResult === 'pending' || tokenResult === 'denied') {
-                throw new Error(`Access token niet beschikbaar (status: ${tokenResult}). Geef toestemming in de extensie-instellingen.`);
+                throw new Error(`Access token niet beschikbaar (status: ${tokenResult}).`);
             }
             accessToken = tokenResult;
         }
 
-        // Altijd de master base URL gebruiken — dit werkt voor alle regio's
-        regionBase = MASTER_BASE;
+        // 2. Regio van het huidige project ophalen
+        //    project.region is bv. "europe", "northAmerica", "asia", ...
+        const project = await API.project.getProject();
+        const region  = (project.region || 'europe').toLowerCase();
+        log(`Project regio: ${region}`, 'info');
+
+        // 3. Vraag de regio-lijst op via de master en pak de juiste base-URL
+        const regionsResp = await fetch(`${MASTER_BASE}/regions`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
+            }
+        });
+        if (!regionsResp.ok) {
+            throw new Error(`/regions → HTTP ${regionsResp.status}`);
+        }
+        const regions = await regionsResp.json();
+        // regions is een array zoals [{ region:"europe", regionEndpoints:[{name:"tcapi", uri:"https://app.eu.connect.trimble.com/tc/api/2.0/"}, ...] }, ...]
+        const match = regions.find(r => (r.region || '').toLowerCase() === region) || regions[0];
+        const tcApi = (match.regionEndpoints || []).find(e => e.name === 'tcapi' || e.name === 'tc-api');
+        if (!tcApi) throw new Error('Kan regionale tc-api endpoint niet vinden.');
+
+        regionBase = tcApi.uri.replace(/\/+$/, ''); // trailing slash weg
         log(`REST basis-URL: ${regionBase}`, 'info');
     }
 
