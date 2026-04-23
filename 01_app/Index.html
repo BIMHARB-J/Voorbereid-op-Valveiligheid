@@ -355,7 +355,7 @@
     </div>
 
     <!-- ⚠ TESTSCRIPT BANNER BOVEN -->
-    <div class="test-banner">⚠ &nbsp;DEZE STAP DIEN VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner">⚠ &nbsp;DEZE STAP DIENt VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <!-- Stap 2: Script uitvoeren -->
     <div class="step" id="step2">
@@ -570,12 +570,16 @@
     };
     // De master URL werkt voor alle regio's — regiospecifieke servers worden
     // intern door Trimble afgehandeld via projectId routing.
-    const MASTER_BASE = 'https://app.connect.trimble.com/tc/api/2.0';
+    const REGION_HOSTS = {
+        europe:        'https://app.eu.connect.trimble.com/tc/api/2.0',
+        northamerica:  'https://app.na.connect.trimble.com/tc/api/2.0',
+        asia:          'https://app.as.connect.trimble.com/tc/api/2.0',
+        australia:     'https://app.au.connect.trimble.com/tc/api/2.0',
+    };
 
     async function ensureRestReady() {
         if (accessToken && regionBase) return;
 
-        // 1. Token
         if (!accessToken) {
             const tokenResult = await API.extension.requestPermission('accesstoken');
             if (!tokenResult || tokenResult === 'pending' || tokenResult === 'denied') {
@@ -584,29 +588,13 @@
             accessToken = tokenResult;
         }
 
-        // 2. Regio van het huidige project ophalen
-        //    project.region is bv. "europe", "northAmerica", "asia", ...
         const project = await API.project.getProject();
-        const region  = (project.region || 'europe').toLowerCase();
+        const region  = (project.region || 'europe')
+            .toLowerCase()
+            .replace(/[\s_-]/g, '');   // "northAmerica" → "northamerica"
+
+        regionBase = REGION_HOSTS[region] || REGION_HOSTS.europe;
         log(`Project regio: ${region}`, 'info');
-
-        // 3. Vraag de regio-lijst op via de master en pak de juiste base-URL
-        const regionsResp = await fetch(`${MASTER_BASE}/regions`, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Accept': 'application/json'
-            }
-        });
-        if (!regionsResp.ok) {
-            throw new Error(`/regions → HTTP ${regionsResp.status}`);
-        }
-        const regions = await regionsResp.json();
-        // regions is een array zoals [{ region:"europe", regionEndpoints:[{name:"tcapi", uri:"https://app.eu.connect.trimble.com/tc/api/2.0/"}, ...] }, ...]
-        const match = regions.find(r => (r.region || '').toLowerCase() === region) || regions[0];
-        const tcApi = (match.regionEndpoints || []).find(e => e.name === 'tcapi' || e.name === 'tc-api');
-        if (!tcApi) throw new Error('Kan regionale tc-api endpoint niet vinden.');
-
-        regionBase = tcApi.uri.replace(/\/+$/, ''); // trailing slash weg
         log(`REST basis-URL: ${regionBase}`, 'info');
     }
 
