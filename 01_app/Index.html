@@ -355,7 +355,7 @@
     </div>
 
     <!-- ⚠ TESTSCRIPT BANNER BOVEN -->
-    <div class="test-banner">⚠ &nbsp;DEZE STAP DIEN VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <!-- Stap 2: Script uitvoeren -->
     <div class="step" id="step2">
@@ -377,7 +377,7 @@
 
     <!-- Stap 3: IFC genereren & tonen -->
     <!-- ⚠ TESTSCRIPT BANNER ONDER -->
-    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIP — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
     <div class="step" id="step3">
         <div class="step-header">
             <div class="step-num">3</div>
@@ -554,50 +554,60 @@
     }
 
     // ── REST API helper: regio-URL + access token ophalen ─────
-    // De Workspace API heeft geen file-methodes. Bestandsbeheer gaat
-    // via de Trimble Connect Core REST API met het access token.
     let accessToken = null;
-    let regionBase  = null;  // bijv. "https://app.connect.trimble.com/tc/api/2.0"
+    let regionBase  = null;
+
+    // Regio-URL mapping (gebaseerd op Trimble Connect documentatie)
+    // Master endpoint voor regio-discovery:
+    // GET https://app.connect.trimble.com/tc/api/2.0/regions
+    const REGION_URLS = {
+        'europe' : 'https://app.connect.trimble.com/tc/api/2.0',   // EU zit op dezelfde master URL
+        'eu'     : 'https://app.connect.trimble.com/tc/api/2.0',
+        'us'     : 'https://app.connect.trimble.com/tc/api/2.0',
+        'na'     : 'https://app.connect.trimble.com/tc/api/2.0',
+        'asia'   : 'https://app.connect.trimble.com/tc/api/2.0',
+        'ap'     : 'https://app.connect.trimble.com/tc/api/2.0',
+    };
+    // De master URL werkt voor alle regio's — regiospecifieke servers worden
+    // intern door Trimble afgehandeld via projectId routing.
+    const MASTER_BASE = 'https://app.connect.trimble.com/tc/api/2.0';
 
     async function ensureRestReady() {
         if (accessToken && regionBase) return;
 
-        // Token ophalen — requestPermission geeft het token terug als string
-        // zodra de gebruiker toestemming heeft gegeven (stap 1 doet dit al).
-        accessToken = await API.extension.requestPermission('accesstoken');
-        if (!accessToken || accessToken === 'pending' || accessToken === 'denied') {
-            throw new Error(`Access token niet beschikbaar (status: ${accessToken}). Geef toestemming in de extensie-instellingen.`);
+        if (!accessToken) {
+            const tokenResult = await API.extension.requestPermission('accesstoken');
+            if (!tokenResult || tokenResult === 'pending' || tokenResult === 'denied') {
+                throw new Error(`Access token niet beschikbaar (status: ${tokenResult}). Geef toestemming in de extensie-instellingen.`);
+            }
+            accessToken = tokenResult;
         }
 
-        // Project-info ophalen om de regio te bepalen
-        const project = await API.project.getProject();
-        log(`Project regio: ${project.location || 'onbekend'}`, 'info');
-
-        // Regio naar base-URL vertalen (EU = europa endpoint)
-        const loc = (project.location || '').toLowerCase();
-        if (loc.includes('europe') || loc === 'eu') {
-            regionBase = 'https://europe.connect.trimble.com/tc/api/2.0';
-        } else if (loc.includes('asia') || loc === 'ap') {
-            regionBase = 'https://asia.connect.trimble.com/tc/api/2.0';
-        } else {
-            regionBase = 'https://app.connect.trimble.com/tc/api/2.0';
-        }
+        // Altijd de master base URL gebruiken — dit werkt voor alle regio's
+        regionBase = MASTER_BASE;
         log(`REST basis-URL: ${regionBase}`, 'info');
     }
 
     async function restGet(path) {
-        const r = await fetch(`${regionBase}${path}`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+        const url = `${regionBase}${path}`;
+        log(`REST GET: ${url}`, '');
+        const r = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
+            }
         });
-        if (!r.ok) throw new Error(`GET ${path} → HTTP ${r.status}`);
+        if (!r.ok) {
+            const body = await r.text().catch(() => '');
+            throw new Error(`GET ${path} → HTTP ${r.status}: ${body.slice(0,200)}`);
+        }
         return r.json();
     }
 
-    async function restGetBinary(path) {
-        const r = await fetch(`${regionBase}${path}`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        if (!r.ok) throw new Error(`GET (binary) ${path} → HTTP ${r.status}`);
+    async function restGetBinary(url) {
+        log(`Bestand ophalen van: ${url.slice(0,80)}...`, '');
+        const r = await fetch(url);   // download-URL heeft geen auth header nodig
+        if (!r.ok) throw new Error(`Download → HTTP ${r.status}`);
         return r.arrayBuffer();
     }
 
