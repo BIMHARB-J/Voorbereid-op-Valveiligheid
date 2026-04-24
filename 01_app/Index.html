@@ -153,7 +153,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ⚙️  CONFIGURATIE — vul hier je Cloudflare Worker URL in na het deployen
 // ─────────────────────────────────────────────────────────────────────────────
-const PROXY_BASE = 'https://edgeprotector.jja-hoven.workers.dev/api';
+const PROXY_BASE = 'https://JOUW-WORKER.workers.dev/api';
 // Voorbeeld: 'https://edgeprotector.jandevries.workers.dev/api'
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -363,41 +363,55 @@ async function proxyPost(path, formData) {
 }
 
 // ── Model ophalen ─────────────────────────────────────────────────────────────
+// BELANGRIJK: viewer.getModels() geeft een intern viewer-ID terug dat NIET
+// overeenkomt met het Trimble REST API file-ID. We gebruiken de bestandsnaam
+// om het juiste bestand op te zoeken in de project-bestandenlijst.
 async function getActiveModel() {
-    // 1. Viewer geeft model ID terug
     const viewer = await API.viewer;
-    let modelId = null;
+
+    // 1. Naam + viewer-info ophalen
+    let viewerName = null;
     try {
         const models = await viewer.getModels();
         if (models && models.length > 0) {
-            modelId = models[0].modelId || models[0].id;
-            log(`Viewer model id: ${modelId}`, 'info');
+            const m = models[0];
+            viewerName = m.name || m.fileName || null;
+            log(`Viewer model: id=${m.modelId || m.id}, naam=${viewerName}`, 'info');
         }
     } catch (e) {
         log(`viewer.getModels: ${e.message}`, 'warn');
     }
 
-    if (modelId) {
-        // 2. Bestandsinfo ophalen via proxy
-        try {
-            const info = await proxyGet(`/projects/${projectId}/files/${modelId}`);
-            return info;
-        } catch (e) {
-            log(`Bestandsinfo ophalen mislukt: ${e.message}`, 'warn');
-            // Geef alleen het id terug zodat we toch door kunnen
-            return { id: modelId, name: 'Onbekend model' };
-        }
-    }
-
-    // 3. Fallback: eerste IFC in project
-    log('Geen viewer-model, zoek in projectbestanden...', 'warn');
+    // 2. Alle projectbestanden ophalen en matchen op naam
+    log('Projectbestanden ophalen via REST...', 'info');
     const resp  = await proxyGet(`/projects/${projectId}/files`);
     const files = resp.list || resp.files || resp;
-    const ifc   = (files || []).find(f =>
-        f.name && (f.name.toLowerCase().endsWith('.ifc') || f.name.toLowerCase().endsWith('.ifczip'))
-    );
-    if (!ifc) throw new Error('Geen IFC bestand gevonden in het project.');
-    log(`Fallback IFC: ${ifc.name}`, 'warn');
+
+    if (!files || !files.length) {
+        throw new Error('Geen bestanden gevonden in het project.');
+    }
+
+    // Probeer op naam te matchen (viewer geeft soms de bestandsnaam terug)
+    let matched = null;
+    if (viewerName) {
+        matched = files.find(f => f.name && f.name === viewerName);
+        if (!matched) {
+            // Probeer zonder extensie
+            const baseName = viewerName.replace(/\.[^.]+$/, '').toLowerCase();
+            matched = files.find(f => f.name && f.name.toLowerCase().replace(/\.[^.]+$/, '') === baseName);
+        }
+        if (matched) log(`Bestand gevonden op naam: ${matched.name}`, 'ok');
+    }
+
+    // Fallback: eerste IFC bestand in de lijst
+    if (!matched) {
+        matched = files.find(f =>
+            f.name && (f.name.toLowerCase().endsWith('.ifc') || f.name.toLowerCase().endsWith('.ifczip'))
+        );
+        if (matched) log(`Fallback: eerste IFC gebruikt: ${matched.name}`, 'warn');
+    }
+
+    if (!matched) throw new Error('Geen IFC bestand gevonden in het project.');
     return ifc;
 }
 
