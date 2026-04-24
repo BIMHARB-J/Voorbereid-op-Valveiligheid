@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENt VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -160,6 +160,7 @@ const PROXY_BASE = 'https://edgeprotector.jja-hoven.workers.dev/api';
 let API          = null;
 let accessToken  = null;
 let projectId    = null;
+    let projectRegion = 'europe';
 let currentModel = null;
 let running      = false;
 
@@ -244,6 +245,7 @@ async function startPipeline() {
         // Project ophalen
         const project = await API.project.getProject();
         projectId = project.id;
+        projectRegion = (project.location || project.region || 'europe').toLowerCase().split(' ')[0];
         log(`Project: ${project.name} (${projectId})`, 'info');
 
         // Proxy verbinding testen
@@ -332,7 +334,8 @@ async function testProxy() {
 }
 
 async function proxyGet(path) {
-    const r = await fetch(`${PROXY_BASE}${path}`, {
+    const sep = path.includes('?') ? '&' : '?';
+    const r = await fetch(`${PROXY_BASE}${path}${sep}region=${projectRegion}`, {
         headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Accept': 'application/json',
@@ -346,7 +349,8 @@ async function proxyGet(path) {
 }
 
 async function proxyPost(path, formData) {
-    const r = await fetch(`${PROXY_BASE}${path}`, {
+    const sep = path.includes('?') ? '&' : '?';
+    const r = await fetch(`${PROXY_BASE}${path}${sep}region=${projectRegion}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}` },
         body: formData,
