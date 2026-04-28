@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP dient VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -154,6 +154,7 @@
 // ⚙️  CONFIGURATIE — vul hier je Cloudflare Worker URL in na het deployen
 // ─────────────────────────────────────────────────────────────────────────────
 const PROXY_BASE = 'https://edgeprotector.jja-hoven.workers.dev/api';
+// Voorbeeld: 'https://edgeprotector.jandevries.workers.dev/api'
 // ─────────────────────────────────────────────────────────────────────────────
 
 let API          = null;
@@ -364,61 +365,35 @@ async function proxyPost(path, formData) {
 }
 
 // ── Model ophalen ─────────────────────────────────────────────────────────────
-// viewer.getModels() geeft een intern viewer-ID terug, niet het REST file-ID.
-// We zoeken het bestand via de naam in de folder-bestandenlijst.
-// Correct endpoint: GET /projects/{pid}/folders/{folderId}/files
+// viewer.getModels() geeft objecten terug met { id, name, isLatestVersion, ... }
+// Het "id" veld IS het Trimble file ID dat we nodig hebben voor de REST API.
+// We hebben dus geen aparte bestandslijst nodig.
 async function getActiveModel() {
     const viewer = await API.viewer;
-
-    // 1. Bestandsnaam ophalen uit viewer
-    let viewerName = null;
+    let models = [];
     try {
-        const models = await viewer.getModels();
-        if (models && models.length > 0) {
-            const m = models[0];
-            viewerName = m.name || m.fileName || null;
-            log(`Viewer model: id=${m.modelId || m.id}, naam=${viewerName}`, 'info');
-        }
+        models = await viewer.getModels();
+        log(`Viewer heeft ${models.length} model(len) geladen`, 'info');
     } catch (e) {
-        log(`viewer.getModels: ${e.message}`, 'warn');
+        throw new Error(`viewer.getModels() mislukt: ${e.message}`);
     }
 
-    // 2. Bestanden ophalen via het juiste endpoint:
-    //    GET /projects/{pid}/folders/{rootId}/files
-    //    rootFolderId komt uit de project response (project.rootId)
-    if (!rootFolderId) {
-        // rootId ophalen als we het nog niet hebben
-        const proj = await proxyGet(`/projects/${projectId}`);
-        rootFolderId = proj.rootId;
-        log(`Root folder id: ${rootFolderId}`, 'info');
+    if (!models || models.length === 0) {
+        throw new Error('Geen modellen geladen in de viewer. Open eerst een IFC model.');
     }
 
-    log(`Bestanden ophalen uit root folder...`, 'info');
-    const resp  = await proxyGet(`/projects/${projectId}/folders/${rootFolderId}/files`);
-    const files = resp.list || resp.files || (Array.isArray(resp) ? resp : []);
+    // Neem het eerste model (of het eerste IFC)
+    let model = models.find(m => m.name && m.name.toLowerCase().endsWith('.ifc'))
+                || models[0];
 
-    if (!files.length) throw new Error('Geen bestanden gevonden in de root folder.');
+    log(`Geselecteerd model: "${model.name}" (id: ${model.id})`, 'ok');
 
-    // 3. Matchen op naam
-    let matched = null;
-    if (viewerName) {
-        matched = files.find(f => f.name && f.name === viewerName);
-        if (!matched) {
-            const base = viewerName.replace(/\.[^.]+$/, '').toLowerCase();
-            matched = files.find(f => f.name && f.name.toLowerCase().replace(/\.[^.]+$/, '') === base);
-        }
-        if (matched) log(`Bestand gevonden op naam: ${matched.name}`, 'ok');
-    }
-
-    // 4. Fallback: eerste IFC in de lijst
-    if (!matched) {
-        matched = files.find(f =>
-            f.name && (f.name.toLowerCase().endsWith('.ifc') || f.name.toLowerCase().endsWith('.ifczip'))
-        );
-        if (matched) log(`Fallback: eerste IFC gebruikt: ${matched.name}`, 'warn');
-    }
-
-    if (!matched) throw new Error('Geen IFC bestand gevonden. Controleer of het model in de root map staat.');
+    // Geef het model terug — id en name zijn genoeg voor download + upload
+    return {
+        id:   model.id,
+        name: model.name,
+        versionId: model.versionId || null,
+    };
     return ifc;
 }
 
@@ -430,25 +405,35 @@ async function runFallProtectionScript(model, onProgress) {
     log('⚠ TESTSCRIPT: dupliceert bestand zonder verwerking', 'warn');
     onProgress(5, '[TEST] Download-link ophalen via proxy...');
 
-    // Download-link ophalen via de proxy
-    const verId = model.versionId || model.latestVersionId;
-    const dlPath = verId
-        ? `/projects/${projectId}/files/${model.id}/versions/${verId}/downloadlink`
-        : `/projects/${projectId}/files/${model.id}/versions/latest/downloadlink`;
+    // viewer.getModels() geeft het file-id terug.
+    // Download endpoint: GET /files/{fileId}/binarydata  (geen /projects/ prefix nodig)
+    // Dit geeft een redirect naar een pre-signed S3 URL.
+    // We volgen de redirect via de proxy.
+    const dlPath = `/files/${model.id}/binarydata`;
 
-    const dlResp = await proxyGet(dlPath);
-    const dlUrl  = dlResp.url || dlResp.downloadUrl || dlResp;
+    // Haal de binary data op via de proxy (volgt de S3 redirect automatisch)
+    const dlResp = await fetch(`${PROXY_BASE}${dlPath}?region=${projectRegion}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
 
-    if (!dlUrl || typeof dlUrl !== 'string') {
-        throw new Error(`Onverwacht formaat download-link: ${JSON.stringify(dlUrl)}`);
+    if (!dlResp.ok) {
+        // Fallback: probeer via downloadlink endpoint
+        log(`binarydata mislukt (HTTP ${dlResp.status}), probeer downloadlink...`, 'warn');
+        const dlLinkResp = await proxyGet(`/files/${model.id}/downloadlink`);
+        const dlUrl = dlLinkResp.url || dlLinkResp.downloadUrl || dlLinkResp;
+        if (!dlUrl || typeof dlUrl !== 'string') {
+            throw new Error(`Download mislukt (HTTP ${dlResp.status}) en geen downloadlink. Controleer of het bestand bestaat.`);
+        }
+        log('Download-link verkregen via fallback ✓', 'ok');
+        onProgress(20, '[TEST] Bestand downloaden van S3...');
+        const fileResp = await fetch(dlUrl);
+        if (!fileResp.ok) throw new Error(`Download mislukt: HTTP ${fileResp.status}`);
+        var sourceBytes = await fileResp.arrayBuffer();
+    } else {
+        var sourceBytes = await dlResp.arrayBuffer();
     }
     log('Download-link verkregen ✓', 'ok');
     onProgress(20, '[TEST] Bestand downloaden van S3...');
-
-    // Bestand zelf downloaden — dit is een pre-signed S3 URL, geen auth header nodig
-    const fileResp = await fetch(dlUrl);
-    if (!fileResp.ok) throw new Error(`Download mislukt: HTTP ${fileResp.status}`);
-    const sourceBytes = await fileResp.arrayBuffer();
 
     log(`Ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
     onProgress(50, '[TEST] "Verwerking" simuleren...');
@@ -471,11 +456,13 @@ async function uploadAndShowIfc(blob, sourceModel) {
     log(`Uploaden als: ${outputName}`, 'info');
 
     const form = new FormData();
+    form.append('projectId', projectId);
     form.append('name', outputName);
-    if (sourceModel.parentId) form.append('parentId', sourceModel.parentId);
+    form.append('parentId', rootFolderId || '');
     form.append('data', blob, outputName);
 
-    const uploaded = await proxyPost(`/projects/${projectId}/files`, form);
+    // Upload endpoint: POST /files  (zonder /projects/ prefix)
+    const uploaded = await proxyPost(`/files`, form);
     log(`Upload geslaagd ✓ (id: ${uploaded.id})`, 'ok');
 
     // Model als overlay toevoegen in de viewer
