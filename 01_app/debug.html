@@ -2,119 +2,93 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v4</title>
+<title>EP Debug v5 - Download endpoints</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
-  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
   .ok { border-color: #22c55e; }
   .err { border-color: #ef4444; color: #ef4444; }
-  .warn { border-color: #f59e0b; color: #f59e0b; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v4</h1>
+<h1 style="color:#00c8ff">EP Debug v5 — Download endpoints</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="step1()">1. Dump volledige project response</button>
-<button onclick="step2()">2. Dump volledige viewer.getModels()</button>
-<button onclick="step3()">3. Test endpoints met echte rootId</button>
+<button onclick="run()">▶ Test alle download endpoints</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-let API, token, pid, region;
+let token, pid, region, fileId, projectId;
 
-function add(label, status, body, cls) {
-  cls = cls || (status >= 200 && status < 300 ? 'ok' : 'err');
+function add(label, status, body) {
+  const ok = status >= 200 && status < 300;
   document.getElementById('out').innerHTML +=
-    `<h2>${label}${status ? ' → HTTP ' + status : ''}</h2>
-     <div class="r ${cls}">${typeof body === 'string' ? body : JSON.stringify(body, null, 2)}</div>`;
+    `<h2>${label} → HTTP ${status}</h2>
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body:JSON.stringify(body,null,2)}</div>`;
 }
 
 async function get(path) {
-  const url = `${PROXY}/api${path}?region=${region}`;
-  const r = await fetch(url, {
+  const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
     headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
   });
   let b; try { b = await r.json(); } catch { b = await r.text(); }
   return { status: r.status, body: b };
 }
 
-// Stap 1: dump de volledige project response zodat we alle velden zien
-async function step1() {
-  const r = await get(`/projects/${pid}`);
-  add('Volledige project response (alle velden)', r.status, r.body);
-}
+async function run() {
+  document.getElementById('out').innerHTML = '';
 
-// Stap 2: dump alles wat viewer.getModels() teruggeeft
-async function step2() {
-  try {
-    const viewer = await API.viewer;
-    const models = await viewer.getModels();
-    add('viewer.getModels() output', '', models, 'ok');
-    
-    // Probeer ook getLoadedModels als het bestaat
-    try {
-      const loaded = await viewer.getLoadedModels();
-      add('viewer.getLoadedModels()', '', loaded, 'ok');
-    } catch(e) { add('viewer.getLoadedModels()', '', 'Niet beschikbaar: ' + e.message, 'warn'); }
+  // Alle mogelijke download-gerelateerde endpoints voor één file
+  const fid = fileId; // bijv. GCipjwqd3JM
+  const pid2 = pid;
 
-    // Probeer ook selection info
-    try {
-      const sel = await viewer.getSelection();
-      add('viewer.getSelection()', '', sel, 'ok');
-    } catch(e) { add('viewer.getSelection()', '', 'Niet beschikbaar: ' + e.message, 'warn'); }
-
-  } catch(e) {
-    add('viewer.getModels() FOUT', '', e.message, 'err');
-  }
-}
-
-// Stap 3: gebruik de echte rootId uit de project response
-async function step3() {
-  // Haal project op en gebruik het juiste veld
-  const proj = await get(`/projects/${pid}`);
-  const p = proj.body;
-  
-  // Probeer alle mogelijke rootId veldnamen
-  const rootId = p.rootId || p.rootFolderId || p.root_id || p.rootFolder || 
-                 (p.root && p.root.id) || 'wrCXDuk3bms'; // hardcode fallback uit eerdere response
-  
-  add('Gebruikte rootId', '', `rootId veld: ${rootId} | alle root-gerelateerde velden: ` + 
-    JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k]) => k.toLowerCase().includes('root')))), 
-    rootId ? 'ok' : 'err');
-
-  // Test nu met de echte rootId
   const paths = [
-    `/projects/${pid}/folders/${rootId}/contents`,
-    `/projects/${pid}/folders/${rootId}/children`,  
-    `/projects/${pid}/folders/${rootId}/items`,
-    `/projects/${pid}/folders/${rootId}`,
-    // Probeer ook zonder folders prefix
-    `/${rootId}/files`,
-    `/folders/${rootId}/files`,
+    // Zonder /projects/ prefix
+    `/files/${fid}/downloadlink`,
+    `/files/${fid}/binarydata`,
+    `/files/${fid}/download`,
+    `/files/${fid}/versions/latest/downloadlink`,
+    `/files/${fid}/versions/latest/binarydata`,
+    `/files/${fid}`,
+    // Met /projects/ prefix
+    `/projects/${pid2}/files/${fid}/downloadlink`,
+    `/projects/${pid2}/files/${fid}/versions/latest/downloadlink`,
+    `/projects/${pid2}/files/${fid}/binarydata`,
+    `/projects/${pid2}/files/${fid}`,
+    // fileversions endpoint
+    `/fileversions/${fid}/downloadlink`,
+    `/fileversions/${fid}/binarydata`,
+    `/fileversions/${fid}`,
   ];
 
-  for (const path of paths) {
-    const r = await get(path);
-    add(path, r.status, r.body);
+  for (const p of paths) {
+    const r = await get(p);
+    add(p, r.status, r.body);
   }
 }
 
 (async () => {
   try {
-    API = await TrimbleConnectWorkspace.connect(window.parent, (e, d) => {
-      if (e === 'extension.accessToken' && d && d !== 'pending') token = d;
+    const API = await TrimbleConnectWorkspace.connect(window.parent, (e,d) => {
+      if (e==='extension.accessToken' && d && d!=='pending') token=d;
     });
     const t = await API.extension.requestPermission('accesstoken');
-    if (t && t !== 'pending' && t !== 'denied') token = t;
+    if (t && t!=='pending' && t!=='denied') token = t;
     const p = await API.project.getProject();
     pid    = p.id;
-    region = (p.location || 'europe').toLowerCase().split(' ')[0];
+    region = (p.location||'europe').toLowerCase().split(' ')[0];
+
+    // Eerste model uit viewer pakken
+    const viewer = await API.viewer;
+    const models = await viewer.getModels();
+    fileId = models[0].id;
+    const name = models[0].name;
+
     document.getElementById('st').textContent =
-      `✓ Verbonden | project: ${p.name} (${pid}) | regio: ${region} | token: ${token ? token.substring(0,20)+'...' : 'LEEG'}`;
+      `✓ project: ${p.name} | file: ${name} (${fileId}) | regio: ${region}`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
