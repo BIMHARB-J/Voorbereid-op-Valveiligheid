@@ -2,79 +2,88 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v6 - Download via data/</title>
+<title>EP Debug v7</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
   .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
-  .ok { border-color: #22c55e; }
-  .err { border-color: #ef4444; color: #ef4444; }
+  .ok { border-color: #22c55e; } .err { border-color: #ef4444; color: #ef4444; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v6 — Download via /data/ en versionId</h1>
+<h1 style="color:#00c8ff">EP Debug v7 — Download via Accept header + upload test</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="run()">▶ Test download paden</button>
+<button onclick="run()">▶ Test</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-let token, pid, region, fileId, versionId;
+let token, pid, region, fileId, parentId;
 
 function add(label, status, body) {
   const ok = status >= 200 && status < 300;
   document.getElementById('out').innerHTML +=
     `<h2>${label} → HTTP ${status}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,500):JSON.stringify(body,null,2)}</div>`;
-}
-
-async function get(path, raw) {
-  const url = path.startsWith('http') ? path : `${PROXY}/api${path}?region=${region}`;
-  const r = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Accept': raw ? '*/*' : 'application/json' },
-    redirect: 'follow'
-  });
-  if (raw) {
-    return { status: r.status, body: `bytes: ${(await r.arrayBuffer()).byteLength} — content-type: ${r.headers.get('content-type')}` };
-  }
-  let b; try { b = await r.json(); } catch { b = await r.text(); }
-  return { status: r.status, body: b };
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,600):JSON.stringify(body,null,2)}</div>`;
 }
 
 async function run() {
   document.getElementById('out').innerHTML = '';
 
-  // Stap 1: haal fileinfo op om versionId en thumbnailUrl te zien
-  const info = await get(`/files/${fileId}`);
-  add(`/files/${fileId} (fileinfo)`, info.status, info.body);
+  // Test 1: GET /files/{id} met Accept: application/octet-stream
+  // Trimble stuurt dan misschien een redirect naar de download URL
+  const r1 = await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/octet-stream' },
+    redirect: 'follow'
+  });
+  const bytes1 = await r1.arrayBuffer();
+  add(`GET /files/${fileId} (Accept: octet-stream)`, r1.status,
+    `bytes: ${bytes1.byteLength}, content-type: ${r1.headers.get('content-type')}, url: ${r1.url}`);
 
-  const fi = info.body;
-  const vid = fi.versionId || fileId;
+  // Test 2: GET /files/{id}?download=true
+  const r2 = await fetch(`${PROXY}/api/files/${fileId}?region=${region}&download=true`, {
+    headers: { 'Authorization': `Bearer ${token}` }, redirect: 'follow'
+  });
+  const bytes2 = await r2.arrayBuffer();
+  add(`GET /files/${fileId}?download=true`, r2.status,
+    `bytes: ${bytes2.byteLength}, content-type: ${r2.headers.get('content-type')}`);
 
-  // De thumbnailUrl structuur suggereert dat /data/{token} het download pad is
-  // Laten we paden proberen gebaseerd op wat we zien in de fileinfo
-  const paths = [
-    // versionId gebaseerd
-    `/fileversions/${vid}/binarydata`,
-    `/fileversions/${vid}/downloadlink`,
-    `/fileversions/${vid}`,
-    // data endpoint (gebaseerd op thumbnailUrl patroon)
-    `/data/${fileId}`,
-    // files met versionId param
-    `/files/${fileId}?versionId=${vid}`,
-    `/files/${fileId}/content`,
-    `/files/${fileId}/stream`,
-    // Thumbnail URL direct (alleen om te zien of auth werkt)
-    fi.thumbnailUrl && fi.thumbnailUrl[0] ? fi.thumbnailUrl[0] : null,
-  ].filter(Boolean);
+  // Test 3: POST /files/{id}/downloadlink (sommige APIs gebruiken POST)
+  const r3 = await fetch(`${PROXY}/api/files/${fileId}/downloadlink?region=${region}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  let b3; try { b3 = await r3.json(); } catch { b3 = await r3.text(); }
+  add(`POST /files/${fileId}/downloadlink`, r3.status, b3);
 
-  for (const p of paths) {
-    const raw = p.includes('/data/') || p.startsWith('https');
-    const r = await get(p, raw);
-    add(p.substring(0, 80), r.status, r.body);
-  }
+  // Test 4: upload testen — POST /files met alleen JSON (geen binary)
+  // Dit test of de upload endpoint correct is voor later
+  const r4 = await fetch(`${PROXY}/api/files?region=${region}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'test_check.ifc', projectId: pid, parentId: parentId })
+  });
+  let b4; try { b4 = await r4.json(); } catch { b4 = await r4.text(); }
+  add(`POST /files (JSON, upload check)`, r4.status, b4);
+
+  // Test 5: de thumbnailUrl werkte — probeer zelfde patroon voor file download
+  // Haal fileinfo op en check of er een 'downloadUrl' of 'url' veld in zit
+  const r5 = await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+  });
+  const fi = await r5.json();
+  add('Alle velden in fileinfo', r5.status, Object.keys(fi).join(', '));
+
+  // Test 6: probeer /files/{id} met HEAD om redirect location te zien
+  const r6 = await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+    method: 'HEAD',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  add(`HEAD /files/${fileId}`, r6.status,
+    `location: ${r6.headers.get('location')}, all headers: ${[...r6.headers.entries()].map(([k,v])=>k+':'+v).join(', ')}`);
 }
 
 (async () => {
@@ -89,10 +98,14 @@ async function run() {
     region = (p.location||'europe').toLowerCase().split(' ')[0];
     const viewer = await API.viewer;
     const models = await viewer.getModels();
-    fileId = models[0].id;
-    versionId = models[0].versionId || fileId;
+    fileId   = models[0].id;
+    // parentId ophalen uit fileinfo
+    const fi = await (await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })).json();
+    parentId = fi.parentId;
     document.getElementById('st').textContent =
-      `✓ file: ${models[0].name} (id:${fileId}, versionId:${versionId})`;
+      `✓ file: ${models[0].name} (${fileId}) | parentId: ${parentId}`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
