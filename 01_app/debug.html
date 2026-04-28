@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>EdgeProtector API Debug</title>
+<style>
+  body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
+  h2 { color: #00c8ff; margin: 16px 0 8px; }
+  .result { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 12px; margin: 8px 0; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+  .ok   { border-color: #22c55e; }
+  .err  { border-color: #ef4444; color: #ef4444; }
+  .warn { border-color: #f59e0b; color: #f59e0b; }
+  button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px; }
+  input  { background: #161a22; border: 1px solid #252b38; color: #e2e8f0; padding: 6px 10px; border-radius: 4px; width: 60%; font-family: monospace; }
+  label  { color: #64748b; display: block; margin-bottom: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1 style="color:#00c8ff">🔍 EdgeProtector — API Debug</h1>
+<p style="color:#64748b">Vul token + project ID in en test de endpoints live.</p>
+
+<div style="margin: 16px 0">
+  <label>PROXY_BASE (zonder /api)</label>
+  <input id="proxy" value="https://edgeprotector.jja-hoven.workers.dev" style="width:400px">
+</div>
+<div style="margin: 8px 0">
+  <label>Bearer Token (plak hier je access token)</label>
+  <input id="token" placeholder="eyJ..." style="width:600px">
+</div>
+<div style="margin: 8px 0">
+  <label>Project ID</label>
+  <input id="pid" value="suXCQWuqEFo">
+</div>
+<div style="margin: 8px 0">
+  <label>Regio</label>
+  <input id="region" value="europe" style="width:120px">
+</div>
+
+<div style="margin: 16px 0">
+  <button onclick="testAll()">▶ Alle endpoints testen</button>
+  <button onclick="testSingle()">Test enkel pad</button>
+  <input id="customPath" value="/projects/suXCQWuqEFo/files" placeholder="/pad/naar/endpoint" style="width:350px">
+</div>
+
+<div id="output"></div>
+
+<script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+<script>
+
+function proxy()  { return document.getElementById('proxy').value.trim(); }
+function token()  { return document.getElementById('token').value.trim(); }
+function pid()    { return document.getElementById('pid').value.trim(); }
+function region() { return document.getElementById('region').value.trim(); }
+
+async function get(path) {
+  const r = await fetch(`${proxy()}/api${path}?region=${region()}`, {
+    headers: { 'Authorization': `Bearer ${token()}`, 'Accept': 'application/json' }
+  });
+  const text = await r.text();
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = text; }
+  return { status: r.status, body: parsed };
+}
+
+function show(label, result) {
+  const out = document.getElementById('output');
+  const ok  = result.status >= 200 && result.status < 300;
+  const cls = ok ? 'ok' : 'err';
+  out.innerHTML += `
+    <h2>${label} → HTTP ${result.status}</h2>
+    <div class="result ${cls}">${JSON.stringify(result.body, null, 2)}</div>`;
+}
+
+async function testAll() {
+  document.getElementById('output').innerHTML = '';
+  const p = pid();
+
+  const paths = [
+    `/projects/${p}`,
+    `/projects/${p}/files`,
+    `/projects/${p}/folders`,
+    `/projects/${p}/nodes`,
+    `/projects/${p}/fileslist`,
+    `/projects/${p}/folders/root/files`,
+    `/projects/${p}/folders/root`,
+  ];
+
+  for (const path of paths) {
+    try {
+      const r = await get(path);
+      show(path, r);
+    } catch(e) {
+      show(path, { status: 'FOUT', body: e.message });
+    }
+  }
+}
+
+async function testSingle() {
+  const path = document.getElementById('customPath').value.trim();
+  try {
+    const r = await get(path);
+    show(path, r);
+  } catch(e) {
+    show(path, { status: 'FOUT', body: e.message });
+  }
+}
+
+// Probeer token automatisch te pakken via Workspace API als we in een extensie zitten
+(async () => {
+  try {
+    const API = await TrimbleConnectWorkspace.connect(window.parent, (e, d) => {
+      if (e === 'extension.accessToken' && d && d !== 'pending') {
+        document.getElementById('token').value = d;
+      }
+    });
+    const t = await API.extension.requestPermission('accesstoken');
+    if (t && t !== 'pending' && t !== 'denied') {
+      document.getElementById('token').value = t;
+    }
+    const p = await API.project.getProject();
+    document.getElementById('pid').value = p.id;
+    document.getElementById('region').value = (p.location || 'europe').toLowerCase().split(' ')[0];
+  } catch(e) {
+    // Niet in extensie, handmatig invullen
+  }
+})();
+</script>
+</body>
+</html>
