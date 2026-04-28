@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENt VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP dient VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -154,12 +154,12 @@
 // ⚙️  CONFIGURATIE — vul hier je Cloudflare Worker URL in na het deployen
 // ─────────────────────────────────────────────────────────────────────────────
 const PROXY_BASE = 'https://edgeprotector.jja-hoven.workers.dev/api';
-// Voorbeeld: 'https://edgeprotector.jandevries.workers.dev/api'
 // ─────────────────────────────────────────────────────────────────────────────
 
 let API          = null;
 let accessToken  = null;
 let projectId    = null;
+    let rootFolderId = null;
     let projectRegion = 'europe';
 let currentModel = null;
 let running      = false;
@@ -244,7 +244,8 @@ async function startPipeline() {
 
         // Project ophalen
         const project = await API.project.getProject();
-        projectId = project.id;
+        projectId    = project.id;
+        rootFolderId = project.rootId || null;
         projectRegion = (project.location || project.region || 'europe').toLowerCase().split(' ')[0];
         log(`Project: ${project.name} (${projectId})`, 'info');
 
@@ -363,13 +364,13 @@ async function proxyPost(path, formData) {
 }
 
 // ── Model ophalen ─────────────────────────────────────────────────────────────
-// BELANGRIJK: viewer.getModels() geeft een intern viewer-ID terug dat NIET
-// overeenkomt met het Trimble REST API file-ID. We gebruiken de bestandsnaam
-// om het juiste bestand op te zoeken in de project-bestandenlijst.
+// viewer.getModels() geeft een intern viewer-ID terug, niet het REST file-ID.
+// We zoeken het bestand via de naam in de folder-bestandenlijst.
+// Correct endpoint: GET /projects/{pid}/folders/{folderId}/files
 async function getActiveModel() {
     const viewer = await API.viewer;
 
-    // 1. Naam + viewer-info ophalen
+    // 1. Bestandsnaam ophalen uit viewer
     let viewerName = null;
     try {
         const models = await viewer.getModels();
@@ -382,28 +383,34 @@ async function getActiveModel() {
         log(`viewer.getModels: ${e.message}`, 'warn');
     }
 
-    // 2. Alle projectbestanden ophalen en matchen op naam
-    log('Projectbestanden ophalen via REST...', 'info');
-    const resp  = await proxyGet(`/projects/${projectId}/files`);
-    const files = resp.list || resp.files || resp;
-
-    if (!files || !files.length) {
-        throw new Error('Geen bestanden gevonden in het project.');
+    // 2. Bestanden ophalen via het juiste endpoint:
+    //    GET /projects/{pid}/folders/{rootId}/files
+    //    rootFolderId komt uit de project response (project.rootId)
+    if (!rootFolderId) {
+        // rootId ophalen als we het nog niet hebben
+        const proj = await proxyGet(`/projects/${projectId}`);
+        rootFolderId = proj.rootId;
+        log(`Root folder id: ${rootFolderId}`, 'info');
     }
 
-    // Probeer op naam te matchen (viewer geeft soms de bestandsnaam terug)
+    log(`Bestanden ophalen uit root folder...`, 'info');
+    const resp  = await proxyGet(`/projects/${projectId}/folders/${rootFolderId}/files`);
+    const files = resp.list || resp.files || (Array.isArray(resp) ? resp : []);
+
+    if (!files.length) throw new Error('Geen bestanden gevonden in de root folder.');
+
+    // 3. Matchen op naam
     let matched = null;
     if (viewerName) {
         matched = files.find(f => f.name && f.name === viewerName);
         if (!matched) {
-            // Probeer zonder extensie
-            const baseName = viewerName.replace(/\.[^.]+$/, '').toLowerCase();
-            matched = files.find(f => f.name && f.name.toLowerCase().replace(/\.[^.]+$/, '') === baseName);
+            const base = viewerName.replace(/\.[^.]+$/, '').toLowerCase();
+            matched = files.find(f => f.name && f.name.toLowerCase().replace(/\.[^.]+$/, '') === base);
         }
         if (matched) log(`Bestand gevonden op naam: ${matched.name}`, 'ok');
     }
 
-    // Fallback: eerste IFC bestand in de lijst
+    // 4. Fallback: eerste IFC in de lijst
     if (!matched) {
         matched = files.find(f =>
             f.name && (f.name.toLowerCase().endsWith('.ifc') || f.name.toLowerCase().endsWith('.ifczip'))
@@ -411,7 +418,7 @@ async function getActiveModel() {
         if (matched) log(`Fallback: eerste IFC gebruikt: ${matched.name}`, 'warn');
     }
 
-    if (!matched) throw new Error('Geen IFC bestand gevonden in het project.');
+    if (!matched) throw new Error('Geen IFC bestand gevonden. Controleer of het model in de root map staat.');
     return ifc;
 }
 
