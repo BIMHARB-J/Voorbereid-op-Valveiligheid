@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v5 - Download endpoints</title>
+<title>EP Debug v6 - Download via data/</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
@@ -13,27 +13,32 @@
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v5 — Download endpoints</h1>
+<h1 style="color:#00c8ff">EP Debug v6 — Download via /data/ en versionId</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="run()">▶ Test alle download endpoints</button>
+<button onclick="run()">▶ Test download paden</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-let token, pid, region, fileId, projectId;
+let token, pid, region, fileId, versionId;
 
 function add(label, status, body) {
   const ok = status >= 200 && status < 300;
   document.getElementById('out').innerHTML +=
     `<h2>${label} → HTTP ${status}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body:JSON.stringify(body,null,2)}</div>`;
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,500):JSON.stringify(body,null,2)}</div>`;
 }
 
-async function get(path) {
-  const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+async function get(path, raw) {
+  const url = path.startsWith('http') ? path : `${PROXY}/api${path}?region=${region}`;
+  const r = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': raw ? '*/*' : 'application/json' },
+    redirect: 'follow'
   });
+  if (raw) {
+    return { status: r.status, body: `bytes: ${(await r.arrayBuffer()).byteLength} — content-type: ${r.headers.get('content-type')}` };
+  }
   let b; try { b = await r.json(); } catch { b = await r.text(); }
   return { status: r.status, body: b };
 }
@@ -41,32 +46,34 @@ async function get(path) {
 async function run() {
   document.getElementById('out').innerHTML = '';
 
-  // Alle mogelijke download-gerelateerde endpoints voor één file
-  const fid = fileId; // bijv. GCipjwqd3JM
-  const pid2 = pid;
+  // Stap 1: haal fileinfo op om versionId en thumbnailUrl te zien
+  const info = await get(`/files/${fileId}`);
+  add(`/files/${fileId} (fileinfo)`, info.status, info.body);
 
+  const fi = info.body;
+  const vid = fi.versionId || fileId;
+
+  // De thumbnailUrl structuur suggereert dat /data/{token} het download pad is
+  // Laten we paden proberen gebaseerd op wat we zien in de fileinfo
   const paths = [
-    // Zonder /projects/ prefix
-    `/files/${fid}/downloadlink`,
-    `/files/${fid}/binarydata`,
-    `/files/${fid}/download`,
-    `/files/${fid}/versions/latest/downloadlink`,
-    `/files/${fid}/versions/latest/binarydata`,
-    `/files/${fid}`,
-    // Met /projects/ prefix
-    `/projects/${pid2}/files/${fid}/downloadlink`,
-    `/projects/${pid2}/files/${fid}/versions/latest/downloadlink`,
-    `/projects/${pid2}/files/${fid}/binarydata`,
-    `/projects/${pid2}/files/${fid}`,
-    // fileversions endpoint
-    `/fileversions/${fid}/downloadlink`,
-    `/fileversions/${fid}/binarydata`,
-    `/fileversions/${fid}`,
-  ];
+    // versionId gebaseerd
+    `/fileversions/${vid}/binarydata`,
+    `/fileversions/${vid}/downloadlink`,
+    `/fileversions/${vid}`,
+    // data endpoint (gebaseerd op thumbnailUrl patroon)
+    `/data/${fileId}`,
+    // files met versionId param
+    `/files/${fileId}?versionId=${vid}`,
+    `/files/${fileId}/content`,
+    `/files/${fileId}/stream`,
+    // Thumbnail URL direct (alleen om te zien of auth werkt)
+    fi.thumbnailUrl && fi.thumbnailUrl[0] ? fi.thumbnailUrl[0] : null,
+  ].filter(Boolean);
 
   for (const p of paths) {
-    const r = await get(p);
-    add(p, r.status, r.body);
+    const raw = p.includes('/data/') || p.startsWith('https');
+    const r = await get(p, raw);
+    add(p.substring(0, 80), r.status, r.body);
   }
 }
 
@@ -80,15 +87,12 @@ async function run() {
     const p = await API.project.getProject();
     pid    = p.id;
     region = (p.location||'europe').toLowerCase().split(' ')[0];
-
-    // Eerste model uit viewer pakken
     const viewer = await API.viewer;
     const models = await viewer.getModels();
     fileId = models[0].id;
-    const name = models[0].name;
-
+    versionId = models[0].versionId || fileId;
     document.getElementById('st').textContent =
-      `✓ project: ${p.name} | file: ${name} (${fileId}) | regio: ${region}`;
+      `✓ file: ${models[0].name} (id:${fileId}, versionId:${versionId})`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
