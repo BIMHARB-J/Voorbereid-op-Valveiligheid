@@ -2,157 +2,79 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EdgeProtector Debug v2</title>
+<title>EP Debug v3 - File endpoints</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
-  h2 { color: #00c8ff; margin: 16px 0 6px; font-size: 13px; }
-  .result { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 12px; margin: 4px 0 12px; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
-  .ok   { border-color: #22c55e; }
-  .err  { border-color: #ef4444; color: #ef4444; }
+  h2 { color: #00c8ff; margin: 12px 0 4px; font-size: 13px; }
+  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 250px; overflow-y: auto; }
+  .ok { border-color: #22c55e; }
+  .err { border-color: #ef4444; color: #ef4444; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
-  .label { color: #64748b; font-size: 11px; margin-bottom: 2px; }
-  .val   { color: #00c8ff; margin-bottom: 8px; word-break: break-all; }
+  .st { color: #22c55e; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">🔍 EdgeProtector — Debug v2</h1>
-
-<div id="info">
-  <div class="label">Status</div>
-  <div class="val" id="status">Verbinden met Workspace API...</div>
-  <div class="label">Token (eerste 40 tekens)</div>
-  <div class="val" id="tokenPreview">—</div>
-  <div class="label">Project ID</div>
-  <div class="val" id="pidVal">—</div>
-  <div class="label">Regio (uit project)</div>
-  <div class="val" id="regionVal">—</div>
-</div>
-
-<div style="margin:12px 0">
-  <button onclick="testRegions()">1. Test /regions (master)</button>
-  <button onclick="testRegionsDirect()">2. Test /regions (direct, geen proxy)</button>
-  <button onclick="testProjectDirect()">3. Test /projects/{id} (direct)</button>
-  <button onclick="testWorkerToken()">4. Test token via worker</button>
-  <button onclick="testAllPaths()">5. Test alle file-paden</button>
-</div>
-
-<div id="output"></div>
+<h1 style="color:#00c8ff">EP Debug v3 — File endpoints</h1>
+<div id="st">Verbinden...</div>
+<br>
+<button onclick="run()">▶ Test alle file endpoints</button>
+<div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
-let _token = null;
-let _pid   = null;
-let _region = 'europe';
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-const MASTER = 'https://app.connect.trimble.com/tc/api/2.0';
+let token, pid, rootId, region;
 
-function out(label, status, body, ok) {
-  const cls = ok ? 'ok' : 'err';
-  document.getElementById('output').innerHTML +=
+function add(label, status, body) {
+  const ok = status >= 200 && status < 300;
+  document.getElementById('out').innerHTML +=
     `<h2>${label} → HTTP ${status}</h2>
-     <div class="result ${cls}">${JSON.stringify(body, null, 2)}</div>`;
+     <div class="r ${ok?'ok':'err'}">${JSON.stringify(body,null,2)}</div>`;
 }
 
-async function fetchJson(url, token) {
-  const r = await fetch(url, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }});
-  let body; try { body = await r.json(); } catch { body = await r.text(); }
-  return { status: r.status, body };
-}
-
-// 1. /regions via worker
-async function testRegions() {
-  const r = await fetchJson(`${PROXY}/api/regions?region=${_region}`, _token);
-  out('Worker: /regions', r.status, r.body, r.status < 300);
-}
-
-// 2. /regions direct (werkt niet door CORS maar laat de error zien)
-async function testRegionsDirect() {
-  try {
-    const r = await fetchJson(`${MASTER}/regions`, _token);
-    out('Direct: /regions', r.status, r.body, r.status < 300);
-  } catch(e) {
-    out('Direct: /regions', 'CORS/FOUT', e.message, false);
-  }
-}
-
-// 3. /projects/{id} direct
-async function testProjectDirect() {
-  try {
-    const r = await fetchJson(`${MASTER}/projects/${_pid}`, _token);
-    out('Direct: /projects/{id}', r.status, r.body, r.status < 300);
-  } catch(e) {
-    out('Direct: /projects/{id}', 'CORS/FOUT', e.message, false);
-  }
-}
-
-// 4. Token doorsturen via worker en terugkijken
-async function testWorkerToken() {
-  // Stuur token naar worker en vraag /regions op — als dat 401 geeft weten we dat de worker het token niet goed doorstuurt
-  const r = await fetch(`${PROXY}/api/regions?region=${_region}`, {
-    headers: { 'Authorization': `Bearer ${_token}`, 'Accept': 'application/json' }
+async function get(path) {
+  const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
   });
-  const body = await r.text();
-  // Toon ook de request headers die de worker zou ontvangen
-  out(`Worker /regions (raw) — token begint met: ${_token ? _token.substring(0,20)+'...' : 'LEEG'}`, r.status, body, r.status < 300);
+  let b; try { b = await r.json(); } catch { b = await r.text(); }
+  return { status: r.status, body: b };
 }
 
-// 5. Alle mogelijke file-paden testen (met regio uit /regions)
-async function testAllPaths() {
-  // Haal eerst de echte regio-URL op
-  const regR = await fetchJson(`${PROXY}/api/regions?region=${_region}`, _token);
-  out('Regio discovery', regR.status, regR.body, regR.status < 300);
-
-  // Probeer de base URL uit de regions response te halen
-  let base = null;
-  if (regR.status === 200) {
-    const list = regR.body.list || regR.body.regions || regR.body;
-    if (Array.isArray(list)) {
-      const match = list.find(r => (r.name || r.location || '').toLowerCase().includes(_region));
-      if (match) base = match.origin || match.url || match.apiUrl;
-    }
-  }
-  out('Gevonden regio base URL', '—', base || 'niet gevonden — zie /regions response hierboven', !!base);
-
-  // Test paden via worker
+async function run() {
+  document.getElementById('out').innerHTML = '';
+  // De SDK zegt: GetFolderItemsAsync(RootFolderIdentifier)
+  // REST vertaling: GET /projects/{pid}/folders/{folderId}/contents
+  // maar ook mogelijk: /items, /children, of gewoon /folders/{id}
   const paths = [
-    `/projects/${_pid}`,
-    `/projects/${_pid}/files`,
-    `/projects/${_pid}/folders`,
-    `/projects/${_pid}/nodes`,
-    `/projects/${_pid}/folders/root`,
-    `/projects/${_pid}/files?limit=5`,
-    `/projects/${_pid}/fileslist`,
+    `/projects/${pid}/folders/${rootId}/contents`,
+    `/projects/${pid}/folders/${rootId}/items`,
+    `/projects/${pid}/folders/${rootId}/children`,
+    `/projects/${pid}/folders/${rootId}`,
+    `/projects/${pid}/folders`,
+    `/projects/${pid}/items`,
+    `/projects/${pid}/folders/${rootId}/files`,  // al geprobeerd, ter vergelijking
   ];
   for (const p of paths) {
-    const r = await fetchJson(`${PROXY}/api${p}?region=${_region}`, _token);
-    out(`Worker: ${p}`, r.status, r.body, r.status < 300);
+    const r = await get(p);
+    add(p, r.status, r.body);
   }
 }
 
-// Auto-init: token ophalen via Workspace API
 (async () => {
   try {
-    const API = await TrimbleConnectWorkspace.connect(window.parent, (e, d) => {
-      if (e === 'extension.accessToken' && d && d !== 'pending' && d !== 'denied') {
-        _token = d;
-        document.getElementById('tokenPreview').textContent = d.substring(0, 40) + '...';
-      }
+    const API = await TrimbleConnectWorkspace.connect(window.parent, (e,d) => {
+      if (e==='extension.accessToken' && d && d!=='pending') token=d;
     });
     const t = await API.extension.requestPermission('accesstoken');
-    if (t && t !== 'pending' && t !== 'denied') {
-      _token = t;
-      document.getElementById('tokenPreview').textContent = t.substring(0, 40) + '...';
-    }
+    if (t && t!=='pending' && t!=='denied') token = t;
     const p = await API.project.getProject();
-    _pid    = p.id;
-    _region = (p.location || p.region || 'europe').toLowerCase().split(' ')[0];
-    document.getElementById('pidVal').textContent    = _pid;
-    document.getElementById('regionVal').textContent = _region + ' (raw: ' + (p.location || p.region || '?') + ')';
-    document.getElementById('status').textContent    = _token ? '✓ Token ontvangen, klaar om te testen' : '⚠ Geen token — handmatig invullen';
-    document.getElementById('status').style.color    = _token ? '#22c55e' : '#f59e0b';
+    pid    = p.id;
+    rootId = p.rootId;
+    region = (p.location||'europe').toLowerCase().split(' ')[0];
+    document.getElementById('st').innerHTML =
+      `<span class="st">✓ Token: ${token.substring(0,20)}... | Project: ${p.name} | rootId: ${rootId} | regio: ${region}</span>`;
   } catch(e) {
-    document.getElementById('status').textContent = 'Niet in extensie: ' + e.message;
-    document.getElementById('status').style.color = '#f59e0b';
+    document.getElementById('st').textContent = 'Fout: ' + e.message;
   }
 })();
 </script>
