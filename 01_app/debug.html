@@ -2,98 +2,133 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v9 - apidoc scan</title>
+<title>EP Debug v10 - apidoc + systematisch</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
-  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 250px; overflow-y: auto; }
   .ok { border-color: #22c55e; } .err { border-color: #ef4444; color: #ef4444; }
+  .warn { border-color: #f59e0b; color: #f59e0b; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v9</h1>
+<h1 style="color:#00c8ff">EP Debug v10</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="run()">▶ Test download endpoints (apidoc-gebaseerd)</button>
+<button onclick="getApidoc()">1. Haal apidoc.html op (bevat alle endpoints)</button>
+<button onclick="testMore()">2. Test meer download-varianten</button>
+<button onclick="testNetworkTab()">3. Dump browser network requests instructie</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-let token, pid, region, fileId, parentId;
+let token, pid, region, fileId;
 
-function add(label, status, body) {
-  const ok = !status || (status >= 200 && status < 300);
+function add(label, status, body, cls) {
+  cls = cls || (status >= 200 && status < 300 ? 'ok' : 'err');
   document.getElementById('out').innerHTML +=
     `<h2>${label}${status?' → HTTP '+status:''}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,800):JSON.stringify(body,null,2)}</div>`;
+     <div class="r ${cls}">${typeof body==='string'?body.substring(0,1000):JSON.stringify(body,null,2)}</div>`;
 }
 
-async function run() {
+// Stap 1: haal de apidoc op — bevat alle endpoints inclusief download
+async function getApidoc() {
   document.getElementById('out').innerHTML = '';
 
-  // Officiële Trimble apidoc staat op app21.connect.trimble.com/tc/static/apidoc.html
-  // We weten: GET /files/{id}/binarydata is RETIRED
-  // Uit SDK: DownloadAsync(file.Identifier) — wat doet dit intern?
-  //
-  // Nieuwe aanpak: Trimble gebruikt signed /data/{token} URLs
-  // Die token genereer je via GET /files/{id}/downloadtoken of /files/{id}/url
-  // Of je gebruikt de wopi-api voor file access
+  // apidoc staat op de server zelf, pad: /tc/static/apidoc.html
+  // Via de worker: we sturen een request naar de Trimble server buiten /tc/api/2.0
+  // Probeer direct (CORS) en via proxy
+  try {
+    const r = await fetch('https://app21.connect.trimble.com/tc/static/apidoc.html');
+    const text = await r.text();
+    // Zoek naar "download" in de HTML
+    const lines = text.split('\n').filter(l =>
+      l.toLowerCase().includes('download') ||
+      l.toLowerCase().includes('/files/') ||
+      l.toLowerCase().includes('binarydata')
+    );
+    add('apidoc.html (direct, zoek naar download)', r.status, lines.slice(0,30).join('\n') || 'Geen download gevonden in HTML');
+  } catch(e) {
+    add('apidoc.html direct (CORS)', 'CORS', e.message, 'warn');
+  }
 
-  const paths = [
-    // Nieuwe file service endpoints (v2 na de retirement)
-    `/files/${fileId}/downloadtoken`,
-    `/files/${fileId}/url`,
-    `/files/${fileId}/link`,
-    `/files/${fileId}/signedurl`,
-    `/files/${fileId}/tempurl`,
-    // WOPI endpoint
-    `/wopi/files/${fileId}`,
-    `/wopi/files/${fileId}/contents`,
-    // Via filespace (we weten filespaceId = cfe7db01-88f2-48ae-96bb-e9d9bc02e85c)
-    `/filespaces/cfe7db01-88f2-48ae-96bb-e9d9bc02e85c/files/${fileId}`,
-    // De apidoc URL zelf ophalen
-    `/../static/apidoc.html`,
+  // Probeer de OpenAPI JSON spec
+  const specUrls = [
+    'https://app21.connect.trimble.com/tc/api/2.0/openapi.json',
+    'https://app21.connect.trimble.com/tc/api/2.0/swagger.json',
+    'https://app21.connect.trimble.com/tc/static/swagger.json',
+    'https://app.connect.trimble.com/tc/static/swagger.json',
   ];
 
-  for (const p of paths) {
+  for (const u of specUrls) {
     try {
-      const r = await fetch(`${PROXY}/api${p}?region=${region}`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
-      });
-      let b;
-      if (p.includes('apidoc')) {
-        b = (await r.text()).substring(0, 200);
-      } else {
-        try { b = await r.json(); } catch { b = await r.text(); }
-      }
-      add(p, r.status, b);
+      const r = await fetch(u);
+      const text = await r.text();
+      const relevant = text.substring(0, 2000);
+      add(u, r.status, relevant.includes('download') ? 'BEVAT "download" ✓\n' + relevant : relevant);
     } catch(e) {
-      add(p, 'FOUT', e.message);
+      add(u, 'CORS', e.message, 'warn');
     }
   }
+}
 
-  // Extra: probeer de wopi-api-eu direct (CORS verwacht maar geeft status terug)
-  try {
-    const r = await fetch(`https://wopi-api-eu.connect.trimble.com/v1/files/${fileId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    let b; try { b = await r.json(); } catch { b = await r.text(); }
-    add('WOPI direct: /files/{id}', r.status, b);
-  } catch(e) {
-    add('WOPI direct (CORS verwacht)', 'CORS', e.message);
-  }
+// Stap 2: systematisch alle /files varianten testen
+async function testMore() {
+  document.getElementById('out').innerHTML = '';
 
-  // Extra: probeer de projects-api-eu
-  try {
-    const r = await fetch(`https://projects-api-eu.connect.trimble.com/v1/projects/${pid}/files/${fileId}/download`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+  const paths = [
+    // GET met X-Wopi-Override header (WOPI protocol voor download)
+    { path: `/wopi/files/${fileId}/contents`, headers: { 'X-WOPI-Override': 'GET_FILE', 'Accept': '*/*' } },
+    // Shares endpoint - misschien kan je een share aanmaken en via die URL downloaden
+    `/files/${fileId}/shares`,
+    // Activities geven soms download URLs terug
+    `/files/${fileId}/activities`,
+    // Versies endpoint
+    `/files/${fileId}/versions`,
+    // File met specifieke accept header
+    { path: `/files/${fileId}`, headers: { 'Accept': 'application/octet-stream' } },
+  ];
+
+  for (const item of paths) {
+    const path = typeof item === 'string' ? item : item.path;
+    const extraHeaders = typeof item === 'object' && item.headers ? item.headers : {};
+    const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', ...extraHeaders }
     });
-    let b; try { b = await r.json(); } catch { b = await r.text(); }
-    add('projects-api-eu direct: /projects/{pid}/files/{fid}/download', r.status, b);
-  } catch(e) {
-    add('projects-api-eu direct (CORS verwacht)', 'CORS', e.message);
+    let b;
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('octet') || r.status === 200 && !ct.includes('json')) {
+      const ab = await r.arrayBuffer();
+      b = `bytes: ${ab.byteLength}, content-type: ${ct}`;
+    } else {
+      try { b = await r.json(); } catch { b = await r.text(); }
+    }
+    add(path + (Object.keys(extraHeaders).length ? ' ' + JSON.stringify(extraHeaders) : ''), r.status, b);
   }
+}
+
+// Stap 3: instructie om via F12 Network tab het download endpoint te vinden
+function testNetworkTab() {
+  document.getElementById('out').innerHTML = '';
+  add('Instructie: vind het download endpoint via F12', '', `
+1. Open Trimble Connect in de browser (app21.connect.trimble.com)
+2. Druk F12 → Network tab
+3. Filter op: XHR of Fetch
+4. Klik op een IFC bestand om het te downloaden
+5. Zoek de request die de binary data ophaalt
+6. Kopieer de Request URL en de Request Headers
+7. Stuur dit terug — dan weten we het exacte endpoint
+
+Het zal waarschijnlijk iets zijn als:
+- GET /tc/api/2.0/data/{lange-token}
+- GET /tc/api/2.0/files/{id}/transfer
+- Een S3 URL die via een redirect verkregen wordt
+
+ALTERNATIEF: zoek in de Network tab naar:
+- Status 200 met content-type: application/octet-stream
+- Grootte ~3.9MB (dat is CON_DO_Constructie.ifc)
+`, 'warn');
 }
 
 (async () => {
@@ -109,11 +144,7 @@ async function run() {
     const viewer = await API.viewer;
     const models = await viewer.getModels();
     fileId = models[0].id;
-    const fi = await (await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })).json();
-    parentId = fi.parentId;
-    document.getElementById('st').textContent = `✓ file: ${models[0].name} (${fileId}) | parentId: ${parentId}`;
+    document.getElementById('st').textContent = `✓ file: ${models[0].name} (${fileId})`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
