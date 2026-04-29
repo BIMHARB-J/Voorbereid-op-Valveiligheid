@@ -2,22 +2,19 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v10 - apidoc + systematisch</title>
+<title>EP Debug v11 - fileservice URL</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
   .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 250px; overflow-y: auto; }
   .ok { border-color: #22c55e; } .err { border-color: #ef4444; color: #ef4444; }
-  .warn { border-color: #f59e0b; color: #f59e0b; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v10</h1>
+<h1 style="color:#00c8ff">EP Debug v11 — fileservice URL ophalen</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="getApidoc()">1. Haal apidoc.html op (bevat alle endpoints)</button>
-<button onclick="testMore()">2. Test meer download-varianten</button>
-<button onclick="testNetworkTab()">3. Dump browser network requests instructie</button>
+<button onclick="run()">▶ Test endpoints die fileservice URL teruggeven</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
@@ -25,110 +22,84 @@
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
 let token, pid, region, fileId;
 
-function add(label, status, body, cls) {
-  cls = cls || (status >= 200 && status < 300 ? 'ok' : 'err');
+function add(label, status, body) {
+  const ok = status >= 200 && status < 300;
   document.getElementById('out').innerHTML +=
-    `<h2>${label}${status?' → HTTP '+status:''}</h2>
-     <div class="r ${cls}">${typeof body==='string'?body.substring(0,1000):JSON.stringify(body,null,2)}</div>`;
+    `<h2>${label} → HTTP ${status}</h2>
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,1000):JSON.stringify(body,null,2)}</div>`;
 }
 
-// Stap 1: haal de apidoc op — bevat alle endpoints inclusief download
-async function getApidoc() {
-  document.getElementById('out').innerHTML = '';
-
-  // apidoc staat op de server zelf, pad: /tc/static/apidoc.html
-  // Via de worker: we sturen een request naar de Trimble server buiten /tc/api/2.0
-  // Probeer direct (CORS) en via proxy
-  try {
-    const r = await fetch('https://app21.connect.trimble.com/tc/static/apidoc.html');
-    const text = await r.text();
-    // Zoek naar "download" in de HTML
-    const lines = text.split('\n').filter(l =>
-      l.toLowerCase().includes('download') ||
-      l.toLowerCase().includes('/files/') ||
-      l.toLowerCase().includes('binarydata')
-    );
-    add('apidoc.html (direct, zoek naar download)', r.status, lines.slice(0,30).join('\n') || 'Geen download gevonden in HTML');
-  } catch(e) {
-    add('apidoc.html direct (CORS)', 'CORS', e.message, 'warn');
+async function get(path, headers) {
+  const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', ...(headers||{}) },
+    redirect: 'follow'
+  });
+  // Check of response een URL bevat (fileservice URL)
+  const ct = r.headers.get('content-type') || '';
+  if (ct.includes('octet')) {
+    const ab = await r.arrayBuffer();
+    return { status: r.status, body: `BINARY DATA: ${ab.byteLength} bytes ✓`, binary: ab };
   }
-
-  // Probeer de OpenAPI JSON spec
-  const specUrls = [
-    'https://app21.connect.trimble.com/tc/api/2.0/openapi.json',
-    'https://app21.connect.trimble.com/tc/api/2.0/swagger.json',
-    'https://app21.connect.trimble.com/tc/static/swagger.json',
-    'https://app.connect.trimble.com/tc/static/swagger.json',
-  ];
-
-  for (const u of specUrls) {
-    try {
-      const r = await fetch(u);
-      const text = await r.text();
-      const relevant = text.substring(0, 2000);
-      add(u, r.status, relevant.includes('download') ? 'BEVAT "download" ✓\n' + relevant : relevant);
-    } catch(e) {
-      add(u, 'CORS', e.message, 'warn');
-    }
-  }
+  let b; try { b = await r.json(); } catch { b = await r.text(); }
+  return { status: r.status, body: b };
 }
 
-// Stap 2: systematisch alle /files varianten testen
-async function testMore() {
+async function run() {
   document.getElementById('out').innerHTML = '';
 
+  // De download URL structuur is:
+  // https://eu-aws-ro.fileservice.trimblecloud.com/fs_s/{filespaceId}.{fileId}?Policy=...
+  // filespaceId = cfe7db01-88f2-48ae-96bb-e9d9bc02e85c (uit project response)
+  // fileId = GCipjwqd3JM
+
+  // Welk endpoint geeft deze pre-signed URL terug?
+  // Kandidaten:
   const paths = [
-    // GET met X-Wopi-Override header (WOPI protocol voor download)
-    { path: `/wopi/files/${fileId}/contents`, headers: { 'X-WOPI-Override': 'GET_FILE', 'Accept': '*/*' } },
-    // Shares endpoint - misschien kan je een share aanmaken en via die URL downloaden
-    `/files/${fileId}/shares`,
-    // Activities geven soms download URLs terug
-    `/files/${fileId}/activities`,
-    // Versies endpoint
-    `/files/${fileId}/versions`,
-    // File met specifieke accept header
-    { path: `/files/${fileId}`, headers: { 'Accept': 'application/octet-stream' } },
+    // Transfer endpoint (gebruikt door Trimble intern)
+    `/files/${fileId}/transfer`,
+    `/files/${fileId}/transfers`,
+    // CDN / storage URL
+    `/files/${fileId}/storageurl`,
+    `/files/${fileId}/cdnurl`,
+    `/files/${fileId}/fileserviceurl`,
+    // Download via de nieuwe fileservice API
+    `/storage/files/${fileId}`,
+    `/storage/files/${fileId}/download`,
+    // Via filespace ID direct
+    `/filespaces/${fileId}/download`,
+    // WOPI met juiste header
+    { path: `/wopi/files/${fileId}/contents`, h: { 'X-WOPI-Override': 'GET_FILE' } },
+    // GET met redirect=false om Location te zien
+    { path: `/files/${fileId}`, h: { 'Accept': 'application/octet-stream' }, manual: true },
   ];
 
   for (const item of paths) {
-    const path = typeof item === 'string' ? item : item.path;
-    const extraHeaders = typeof item === 'object' && item.headers ? item.headers : {};
-    const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', ...extraHeaders }
-    });
-    let b;
-    const ct = r.headers.get('content-type') || '';
-    if (ct.includes('octet') || r.status === 200 && !ct.includes('json')) {
-      const ab = await r.arrayBuffer();
-      b = `bytes: ${ab.byteLength}, content-type: ${ct}`;
-    } else {
-      try { b = await r.json(); } catch { b = await r.text(); }
+    const path   = typeof item === 'string' ? item : item.path;
+    const xhdrs  = (typeof item === 'object' && item.h) ? item.h : {};
+    const manual = typeof item === 'object' && item.manual;
+
+    try {
+      if (manual) {
+        // Gebruik redirect: manual in de worker kan niet, maar we kunnen
+        // een speciale hint meesturen
+        const r = await fetch(`${PROXY}/api${path}?region=${region}&_manual=1`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/octet-stream' }
+        });
+        const ct = r.headers.get('content-type') || '';
+        const loc = r.headers.get('location') || 'geen location header';
+        const bytes = await r.arrayBuffer();
+        add(`${path} (octet-stream, ${bytes.byteLength} bytes, location: ${loc})`, r.status, ct);
+      } else {
+        const r = await get(path, xhdrs);
+        // Check of de response body een fileservice URL bevat
+        const bodyStr = JSON.stringify(r.body);
+        const hasUrl = bodyStr.includes('fileservice') || bodyStr.includes('trimblecloud') || bodyStr.includes('Policy=');
+        add(path + (hasUrl ? ' ✓ FILESERVICE URL GEVONDEN!' : ''), r.status, r.body);
+      }
+    } catch(e) {
+      add(path, 'FOUT', e.message);
     }
-    add(path + (Object.keys(extraHeaders).length ? ' ' + JSON.stringify(extraHeaders) : ''), r.status, b);
   }
-}
-
-// Stap 3: instructie om via F12 Network tab het download endpoint te vinden
-function testNetworkTab() {
-  document.getElementById('out').innerHTML = '';
-  add('Instructie: vind het download endpoint via F12', '', `
-1. Open Trimble Connect in de browser (app21.connect.trimble.com)
-2. Druk F12 → Network tab
-3. Filter op: XHR of Fetch
-4. Klik op een IFC bestand om het te downloaden
-5. Zoek de request die de binary data ophaalt
-6. Kopieer de Request URL en de Request Headers
-7. Stuur dit terug — dan weten we het exacte endpoint
-
-Het zal waarschijnlijk iets zijn als:
-- GET /tc/api/2.0/data/{lange-token}
-- GET /tc/api/2.0/files/{id}/transfer
-- Een S3 URL die via een redirect verkregen wordt
-
-ALTERNATIEF: zoek in de Network tab naar:
-- Status 200 met content-type: application/octet-stream
-- Grootte ~3.9MB (dat is CON_DO_Constructie.ifc)
-`, 'warn');
 }
 
 (async () => {
