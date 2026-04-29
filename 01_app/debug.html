@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v8</title>
+<title>EP Debug v9 - apidoc scan</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
@@ -12,83 +12,88 @@
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v8 — Redirect check + npm SDK</h1>
+<h1 style="color:#00c8ff">EP Debug v9</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="run()">▶ Test</button>
+<button onclick="run()">▶ Test download endpoints (apidoc-gebaseerd)</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
-const PROXY = 'https://edgeprotector.jja-hoven.workers.dev/api';
-let token, pid, region, fileId;
+const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
+let token, pid, region, fileId, parentId;
 
 function add(label, status, body) {
   const ok = !status || (status >= 200 && status < 300);
   document.getElementById('out').innerHTML +=
     `<h2>${label}${status?' → HTTP '+status:''}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body:JSON.stringify(body,null,2)}</div>`;
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,800):JSON.stringify(body,null,2)}</div>`;
 }
 
 async function run() {
   document.getElementById('out').innerHTML = '';
 
-  // Test 1: redirect-check — ziet de worker een Location header van Trimble?
-  const r1 = await fetch(
-    `${PROXY}/redirect-check/files/${fileId}?region=${region}`,
-    { headers: { 'Authorization': `Bearer ${token}` } }
-  );
-  const j1 = await r1.json();
-  add('Redirect check /files/{id} (octet-stream, manual redirect)', r1.status, j1);
+  // Officiële Trimble apidoc staat op app21.connect.trimble.com/tc/static/apidoc.html
+  // We weten: GET /files/{id}/binarydata is RETIRED
+  // Uit SDK: DownloadAsync(file.Identifier) — wat doet dit intern?
+  //
+  // Nieuwe aanpak: Trimble gebruikt signed /data/{token} URLs
+  // Die token genereer je via GET /files/{id}/downloadtoken of /files/{id}/url
+  // Of je gebruikt de wopi-api voor file access
 
-  // Test 2: als Location gevonden, probeer die URL direct te downloaden
-  if (j1.location) {
-    add('✓ Location header gevonden!', '', j1.location);
-    const r2 = await fetch(j1.location);
-    const bytes = await r2.arrayBuffer();
-    add(`Download via Location URL`, r2.status, `bytes: ${bytes.byteLength}, content-type: ${r2.headers.get('content-type')}`);
-  } else {
-    add('Geen Location header — Trimble gebruikt geen redirect voor download', '', 
-      'Status was: ' + j1.status + '. We moeten een andere aanpak proberen.');
+  const paths = [
+    // Nieuwe file service endpoints (v2 na de retirement)
+    `/files/${fileId}/downloadtoken`,
+    `/files/${fileId}/url`,
+    `/files/${fileId}/link`,
+    `/files/${fileId}/signedurl`,
+    `/files/${fileId}/tempurl`,
+    // WOPI endpoint
+    `/wopi/files/${fileId}`,
+    `/wopi/files/${fileId}/contents`,
+    // Via filespace (we weten filespaceId = cfe7db01-88f2-48ae-96bb-e9d9bc02e85c)
+    `/filespaces/cfe7db01-88f2-48ae-96bb-e9d9bc02e85c/files/${fileId}`,
+    // De apidoc URL zelf ophalen
+    `/../static/apidoc.html`,
+  ];
+
+  for (const p of paths) {
+    try {
+      const r = await fetch(`${PROXY}/api${p}?region=${region}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+      });
+      let b;
+      if (p.includes('apidoc')) {
+        b = (await r.text()).substring(0, 200);
+      } else {
+        try { b = await r.json(); } catch { b = await r.text(); }
+      }
+      add(p, r.status, b);
+    } catch(e) {
+      add(p, 'FOUT', e.message);
+    }
   }
 
-  // Test 3: trimble connect SDK downloaden via npmcdn (als fallback)
-  // Probeer de officiële JS SDK die misschien download ondersteunt
-  add('Info', '', 
-    'Als er geen redirect is, moeten we de file downloaden via de Trimble SDK npm package ' +
-    '(trimble-connect-sdk) of via een alternatieve aanpak zoals de "batch download" API.');
+  // Extra: probeer de wopi-api-eu direct (CORS verwacht maar geeft status terug)
+  try {
+    const r = await fetch(`https://wopi-api-eu.connect.trimble.com/v1/files/${fileId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    let b; try { b = await r.json(); } catch { b = await r.text(); }
+    add('WOPI direct: /files/{id}', r.status, b);
+  } catch(e) {
+    add('WOPI direct (CORS verwacht)', 'CORS', e.message);
+  }
 
-  // Test 4: batch download endpoint
-  const r4 = await fetch(`${PROXY}/api/batch/download?region=${region}`, {
-    method: 'POST',
-    headers: { 
-      'Authorization': `Bearer ${token}`, 
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({ fileIds: [fileId] })
-  });
-  let b4; try { b4 = await r4.json(); } catch { b4 = await r4.text(); }
-  add('POST /batch/download', r4.status, b4);
-
-  // Test 5: search-based download — via de search API
-  const r5 = await fetch(`${PROXY}/api/files/${fileId}/presignedUrl?region=${region}`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  let b5; try { b5 = await r5.json(); } catch { b5 = await r5.text(); }
-  add('GET /files/{id}/presignedUrl', r5.status, b5);
-
-  // Test 6: de batch-api heeft een eigen URL (uit regions response)
-  // europe batch-api = https://batch-api-eu.connect.trimble.com/v1/
-  const r6 = await fetch(`https://batch-api-eu.connect.trimble.com/v1/projects/${pid}/downloads`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ items: [{ fileVersionId: fileId }] })
-  }).catch(e => ({ status: 'CORS', json: async () => e.message }));
-  let b6; try { b6 = await r6.json(); } catch { b6 = 'CORS geblokkeerd'; }
-  add('POST batch-api-eu /projects/{pid}/downloads (direct, CORS verwacht)', r6.status||'CORS', b6);
+  // Extra: probeer de projects-api-eu
+  try {
+    const r = await fetch(`https://projects-api-eu.connect.trimble.com/v1/projects/${pid}/files/${fileId}/download`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    let b; try { b = await r.json(); } catch { b = await r.text(); }
+    add('projects-api-eu direct: /projects/{pid}/files/{fid}/download', r.status, b);
+  } catch(e) {
+    add('projects-api-eu direct (CORS verwacht)', 'CORS', e.message);
+  }
 }
 
 (async () => {
@@ -104,7 +109,11 @@ async function run() {
     const viewer = await API.viewer;
     const models = await viewer.getModels();
     fileId = models[0].id;
-    document.getElementById('st').textContent = `✓ file: ${models[0].name} (${fileId})`;
+    const fi = await (await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })).json();
+    parentId = fi.parentId;
+    document.getElementById('st').textContent = `✓ file: ${models[0].name} (${fileId}) | parentId: ${parentId}`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
