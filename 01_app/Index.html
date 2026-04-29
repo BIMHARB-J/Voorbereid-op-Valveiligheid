@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN te WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -403,37 +403,26 @@ async function getActiveModel() {
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 async function runFallProtectionScript(model, onProgress) {
     log('⚠ TESTSCRIPT: dupliceert bestand zonder verwerking', 'warn');
-    onProgress(5, '[TEST] Download-link ophalen via proxy...');
+    onProgress(5, '[TEST] Bestand downloaden via WOPI...');
 
-    // viewer.getModels() geeft het file-id terug.
-    // Download endpoint: GET /files/{fileId}/binarydata  (geen /projects/ prefix nodig)
-    // Dit geeft een redirect naar een pre-signed S3 URL.
-    // We volgen de redirect via de proxy.
-    const dlPath = `/files/${model.id}/binarydata`;
-
-    // Haal de binary data op via de proxy (volgt de S3 redirect automatisch)
-    const dlResp = await fetch(`${PROXY_BASE}${dlPath}?region=${projectRegion}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
+    // WOPI endpoint: GET /wopi/files/{id}/contents
+    // Dit is het enige werkende download-endpoint in de huidige Trimble API versie.
+    // De proxy stuurt /wopi/* paden door naar {tcApiBase}/wopi/*
+    const wopiUrl = `${PROXY_BASE.replace('/api', '/wopi')}/files/${model.id}/contents?region=${projectRegion}`;
+    const dlResp = await fetch(wopiUrl, {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/octet-stream, */*'
+        }
     });
 
     if (!dlResp.ok) {
-        // Fallback: probeer via downloadlink endpoint
-        log(`binarydata mislukt (HTTP ${dlResp.status}), probeer downloadlink...`, 'warn');
-        const dlLinkResp = await proxyGet(`/files/${model.id}/downloadlink`);
-        const dlUrl = dlLinkResp.url || dlLinkResp.downloadUrl || dlLinkResp;
-        if (!dlUrl || typeof dlUrl !== 'string') {
-            throw new Error(`Download mislukt (HTTP ${dlResp.status}) en geen downloadlink. Controleer of het bestand bestaat.`);
-        }
-        log('Download-link verkregen via fallback ✓', 'ok');
-        onProgress(20, '[TEST] Bestand downloaden van S3...');
-        const fileResp = await fetch(dlUrl);
-        if (!fileResp.ok) throw new Error(`Download mislukt: HTTP ${fileResp.status}`);
-        var sourceBytes = await fileResp.arrayBuffer();
-    } else {
-        var sourceBytes = await dlResp.arrayBuffer();
+        throw new Error(`WOPI download mislukt: HTTP ${dlResp.status} — ${await dlResp.text().catch(()=>'')}`);
     }
-    log('Download-link verkregen ✓', 'ok');
-    onProgress(20, '[TEST] Bestand downloaden van S3...');
+
+    var sourceBytes = await dlResp.arrayBuffer();
+    log(`Bestand ontvangen via WOPI: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
+    onProgress(20, '[TEST] Bestand ontvangen ✓');
 
     log(`Ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
     onProgress(50, '[TEST] "Verwerking" simuleren...');
@@ -455,13 +444,18 @@ async function uploadAndShowIfc(blob, sourceModel) {
         .replace(/\.ifc(zip)?$/i, '') + '_valgevaren.ifc';
     log(`Uploaden als: ${outputName}`, 'info');
 
+    // parentId ophalen uit de fileinfo van het bronmodel
+    // (ligt in dezelfde map als het bronmodel)
+    const fileInfo = await proxyGet(`/files/${sourceModel.id}`);
+    const targetParentId = fileInfo.parentId || rootFolderId || '';
+
     const form = new FormData();
     form.append('projectId', projectId);
     form.append('name', outputName);
-    form.append('parentId', rootFolderId || '');
+    form.append('parentId', targetParentId);
     form.append('data', blob, outputName);
 
-    // Upload endpoint: POST /files  (zonder /projects/ prefix)
+    // Upload endpoint: POST /files
     const uploaded = await proxyPost(`/files`, form);
     log(`Upload geslaagd ✓ (id: ${uploaded.id})`, 'ok');
 
