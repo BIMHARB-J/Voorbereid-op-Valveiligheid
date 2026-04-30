@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN te WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -403,25 +403,65 @@ async function getActiveModel() {
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 async function runFallProtectionScript(model, onProgress) {
     log('⚠ TESTSCRIPT: dupliceert bestand zonder verwerking', 'warn');
-    onProgress(5, '[TEST] Bestand downloaden via WOPI...');
+    onProgress(5, '[TEST] Download-URL ophalen...');
 
-    // WOPI endpoint: GET /wopi/files/{id}/contents
-    // Dit is het enige werkende download-endpoint in de huidige Trimble API versie.
-    // De proxy stuurt /wopi/* paden door naar {tcApiBase}/wopi/*
-    const wopiUrl = `${PROXY_BASE.replace('/api', '/wopi')}/files/${model.id}/contents?region=${projectRegion}`;
-    const dlResp = await fetch(wopiUrl, {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/octet-stream, */*'
-        }
+    // Trimble download werkt via een pre-signed AWS fileservice URL.
+    // De worker onderschept de redirect van /binarydata en geeft de Location URL terug.
+    // Die URL downloaden we dan direct zonder auth.
+    let sourceBytes;
+
+    // Stap 1: probeer /binarydata — worker geeft { downloadUrl } terug als Trimble redirect stuurt
+    const bdResp = await fetch(`${PROXY_BASE}/files/${model.id}/binarydata?region=${projectRegion}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/octet-stream' }
     });
 
-    if (!dlResp.ok) {
-        throw new Error(`WOPI download mislukt: HTTP ${dlResp.status} — ${await dlResp.text().catch(()=>'')}`);
+    const bdCt = bdResp.headers.get('content-type') || '';
+
+    if (bdResp.ok && bdCt.includes('json')) {
+        // Worker heeft de redirect onderschept en geeft downloadUrl terug
+        const bdJson = await bdResp.json();
+        if (bdJson.downloadUrl) {
+            log(`Pre-signed URL verkregen ✓`, 'ok');
+            onProgress(20, '[TEST] Bestand downloaden van fileservice...');
+            const fileResp = await fetch(bdJson.downloadUrl);
+            if (!fileResp.ok) throw new Error(`Fileservice download mislukt: HTTP ${fileResp.status}`);
+            sourceBytes = await fileResp.arrayBuffer();
+        }
+    } else if (bdResp.ok && !bdCt.includes('json')) {
+        // Direct binaire data teruggekomen
+        sourceBytes = await bdResp.arrayBuffer();
     }
 
-    var sourceBytes = await dlResp.arrayBuffer();
-    log(`Bestand ontvangen via WOPI: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
+    // Stap 2: fallback via /transfer
+    if (!sourceBytes) {
+        log(`binarydata mislukt, probeer /transfer...`, 'warn');
+        const tfResp = await fetch(`${PROXY_BASE}/files/${model.id}/transfer?region=${projectRegion}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/octet-stream' }
+        });
+        const tfCt = tfResp.headers.get('content-type') || '';
+        if (tfResp.ok && tfCt.includes('json')) {
+            const tfJson = await tfResp.json();
+            const dlUrl = tfJson.downloadUrl || tfJson.url || tfJson.transferUrl;
+            if (dlUrl) {
+                const fileResp = await fetch(dlUrl);
+                if (!fileResp.ok) throw new Error(`Transfer download mislukt: HTTP ${fileResp.status}`);
+                sourceBytes = await fileResp.arrayBuffer();
+            } else {
+                throw new Error(`Geen download URL in transfer response: ${JSON.stringify(tfJson)}`);
+            }
+        } else if (tfResp.ok) {
+            sourceBytes = await tfResp.arrayBuffer();
+        } else {
+            const errText = await tfResp.text().catch(() => '');
+            throw new Error(`Download mislukt (HTTP ${tfResp.status}): ${errText.substring(0,200)}`);
+        }
+    }
+
+    if (!sourceBytes || sourceBytes.byteLength === 0) {
+        throw new Error('Download leeg — geen bytes ontvangen.');
+    }
+
+    log(`Bestand ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
     onProgress(20, '[TEST] Bestand ontvangen ✓');
 
     log(`Ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
