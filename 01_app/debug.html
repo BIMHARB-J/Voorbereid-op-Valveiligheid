@@ -2,104 +2,120 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug v11 - fileservice URL</title>
+<title>EP Debug - Upload endpoint</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
-  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 250px; overflow-y: auto; }
+  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
   .ok { border-color: #22c55e; } .err { border-color: #ef4444; color: #ef4444; }
+  .warn { border-color: #f59e0b; color: #f59e0b; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug v11 — fileservice URL ophalen</h1>
+<h1 style="color:#00c8ff">EP Debug — Upload endpoint testen</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="run()">▶ Test endpoints die fileservice URL teruggeven</button>
+<button onclick="testUploads()">▶ Test upload varianten</button>
 <div id="out"></div>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-let token, pid, region, fileId;
+let token, pid, region, parentId;
 
 function add(label, status, body) {
   const ok = status >= 200 && status < 300;
   document.getElementById('out').innerHTML +=
     `<h2>${label} → HTTP ${status}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,1000):JSON.stringify(body,null,2)}</div>`;
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,600):JSON.stringify(body,null,2)}</div>`;
 }
 
-async function get(path, headers) {
-  const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json', ...(headers||{}) },
-    redirect: 'follow'
-  });
-  // Check of response een URL bevat (fileservice URL)
-  const ct = r.headers.get('content-type') || '';
-  if (ct.includes('octet')) {
-    const ab = await r.arrayBuffer();
-    return { status: r.status, body: `BINARY DATA: ${ab.byteLength} bytes ✓`, binary: ab };
-  }
-  let b; try { b = await r.json(); } catch { b = await r.text(); }
-  return { status: r.status, body: b };
+// Maak een minimaal geldig IFC bestand voor test-uploads
+function makeTestIfc() {
+  const ifc = `ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Test'),'2;1');
+FILE_NAME('test.ifc','2026-01-01T00:00:00',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+ENDSEC;
+END-ISO-10303-21;`;
+  return new Blob([ifc], { type: 'application/octet-stream' });
 }
 
-async function run() {
+async function testUploads() {
   document.getElementById('out').innerHTML = '';
+  const blob = makeTestIfc();
+  const name = 'EP_upload_test.ifc';
 
-  // De download URL structuur is:
-  // https://eu-aws-ro.fileservice.trimblecloud.com/fs_s/{filespaceId}.{fileId}?Policy=...
-  // filespaceId = cfe7db01-88f2-48ae-96bb-e9d9bc02e85c (uit project response)
-  // fileId = GCipjwqd3JM
+  // Test 1: multipart met veldnaam 'data'
+  const f1 = new FormData();
+  f1.append('projectId', pid);
+  f1.append('parentId', parentId);
+  f1.append('name', name);
+  f1.append('data', blob, name);
+  const r1 = await fetch(`${PROXY}/api/files?region=${region}`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f1
+  });
+  let b1; try { b1 = await r1.json(); } catch { b1 = await r1.text(); }
+  add("multipart veld 'data'", r1.status, b1);
 
-  // Welk endpoint geeft deze pre-signed URL terug?
-  // Kandidaten:
-  const paths = [
-    // Transfer endpoint (gebruikt door Trimble intern)
-    `/files/${fileId}/transfer`,
-    `/files/${fileId}/transfers`,
-    // CDN / storage URL
-    `/files/${fileId}/storageurl`,
-    `/files/${fileId}/cdnurl`,
-    `/files/${fileId}/fileserviceurl`,
-    // Download via de nieuwe fileservice API
-    `/storage/files/${fileId}`,
-    `/storage/files/${fileId}/download`,
-    // Via filespace ID direct
-    `/filespaces/${fileId}/download`,
-    // WOPI met juiste header
-    { path: `/wopi/files/${fileId}/contents`, h: { 'X-WOPI-Override': 'GET_FILE' } },
-    // GET met redirect=false om Location te zien
-    { path: `/files/${fileId}`, h: { 'Accept': 'application/octet-stream' }, manual: true },
-  ];
+  // Test 2: multipart met veldnaam 'file'
+  const f2 = new FormData();
+  f2.append('projectId', pid);
+  f2.append('parentId', parentId);
+  f2.append('name', name);
+  f2.append('file', blob, name);
+  const r2 = await fetch(`${PROXY}/api/files?region=${region}`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f2
+  });
+  let b2; try { b2 = await r2.json(); } catch { b2 = await r2.text(); }
+  add("multipart veld 'file'", r2.status, b2);
 
-  for (const item of paths) {
-    const path   = typeof item === 'string' ? item : item.path;
-    const xhdrs  = (typeof item === 'object' && item.h) ? item.h : {};
-    const manual = typeof item === 'object' && item.manual;
+  // Test 3: multipart met veldnaam 'content'
+  const f3 = new FormData();
+  f3.append('projectId', pid);
+  f3.append('parentId', parentId);
+  f3.append('name', name);
+  f3.append('content', blob, name);
+  const r3 = await fetch(`${PROXY}/api/files?region=${region}`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f3
+  });
+  let b3; try { b3 = await r3.json(); } catch { b3 = await r3.text(); }
+  add("multipart veld 'content'", r3.status, b3);
 
-    try {
-      if (manual) {
-        // Gebruik redirect: manual in de worker kan niet, maar we kunnen
-        // een speciale hint meesturen
-        const r = await fetch(`${PROXY}/api${path}?region=${region}&_manual=1`, {
-          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/octet-stream' }
-        });
-        const ct = r.headers.get('content-type') || '';
-        const loc = r.headers.get('location') || 'geen location header';
-        const bytes = await r.arrayBuffer();
-        add(`${path} (octet-stream, ${bytes.byteLength} bytes, location: ${loc})`, r.status, ct);
-      } else {
-        const r = await get(path, xhdrs);
-        // Check of de response body een fileservice URL bevat
-        const bodyStr = JSON.stringify(r.body);
-        const hasUrl = bodyStr.includes('fileservice') || bodyStr.includes('trimblecloud') || bodyStr.includes('Policy=');
-        add(path + (hasUrl ? ' ✓ FILESERVICE URL GEVONDEN!' : ''), r.status, r.body);
-      }
-    } catch(e) {
-      add(path, 'FOUT', e.message);
-    }
-  }
+  // Test 4: PUT in plaats van POST
+  const f4 = new FormData();
+  f4.append('projectId', pid);
+  f4.append('parentId', parentId);
+  f4.append('name', name);
+  f4.append('data', blob, name);
+  const r4 = await fetch(`${PROXY}/api/files?region=${region}`, {
+    method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: f4
+  });
+  let b4; try { b4 = await r4.json(); } catch { b4 = await r4.text(); }
+  add("PUT multipart veld 'data'", r4.status, b4);
+
+  // Test 5: raw binary upload via PUT /files/{parentId}/upload
+  const r5 = await fetch(`${PROXY}/api/files/${parentId}/upload?region=${region}&name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/octet-stream' },
+    body: blob
+  });
+  let b5; try { b5 = await r5.json(); } catch { b5 = await r5.text(); }
+  add("POST binary naar /files/{parentId}/upload", r5.status, b5);
+
+  // Test 6: upload via /projects/{pid}/files met multipart
+  const f6 = new FormData();
+  f6.append('parentId', parentId);
+  f6.append('name', name);
+  f6.append('data', blob, name);
+  const r6 = await fetch(`${PROXY}/api/projects/${pid}/files?region=${region}`, {
+    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f6
+  });
+  let b6; try { b6 = await r6.json(); } catch { b6 = await r6.text(); }
+  add("POST multipart naar /projects/{pid}/files", r6.status, b6);
 }
 
 (async () => {
@@ -112,10 +128,16 @@ async function run() {
     const p = await API.project.getProject();
     pid    = p.id;
     region = (p.location||'europe').toLowerCase().split(' ')[0];
+    // parentId ophalen van het eerste model
     const viewer = await API.viewer;
     const models = await viewer.getModels();
-    fileId = models[0].id;
-    document.getElementById('st').textContent = `✓ file: ${models[0].name} (${fileId})`;
+    const fileId = models[0].id;
+    const fi = await (await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })).json();
+    parentId = fi.parentId;
+    document.getElementById('st').textContent =
+      `✓ project: ${p.name} | parentId: ${parentId} | regio: ${region}`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
