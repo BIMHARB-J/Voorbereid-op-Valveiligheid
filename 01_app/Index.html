@@ -123,7 +123,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT vervange TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step3">
         <div class="step-header">
@@ -494,7 +494,7 @@ async function uploadAndShowIfc(blob, sourceModel) {
     });
     log(`Initiate response: ${JSON.stringify(initResp).substring(0, 100)}`, 'info');
 
-    const uploadUrl = initResp.url || initResp.uploadUrl || initResp.putUrl || initResp.fileServiceUrl;
+    const uploadUrl = initResp.uploadURL || initResp.url || initResp.uploadUrl || initResp.putUrl;
     if (!uploadUrl) throw new Error(`Geen upload URL in initiate response: ${JSON.stringify(initResp)}`);
     log('Upload URL verkregen ✓', 'ok');
 
