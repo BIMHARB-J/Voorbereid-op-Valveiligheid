@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN te WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -123,7 +123,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT vervange TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step3">
         <div class="step-header">
@@ -364,6 +364,24 @@ async function proxyPost(path, formData) {
     return r.json();
 }
 
+async function proxyJsonPost(path, payload) {
+    const sep = path.includes("?") ? "&" : "?";
+    const r = await fetch(`${PROXY_BASE}${path}${sep}region=${projectRegion}`, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type":  "application/json",
+            "Accept":        "application/json",
+        },
+        body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+        const body = await r.text().catch(() => "");
+        throw new Error(`POST ${path} u2192 HTTP ${r.status}: ${body.slice(0, 200)}`);
+    }
+    return r.json();
+}
+
 // ── Model ophalen ─────────────────────────────────────────────────────────────
 // viewer.getModels() geeft objecten terug met { id, name, isLatestVersion, ... }
 // Het "id" veld IS het Trimble file ID dat we nodig hebben voor de REST API.
@@ -462,19 +480,37 @@ async function uploadAndShowIfc(blob, sourceModel) {
     const fileInfo = await proxyGet(`/files/${sourceModel.id}`);
     const targetParentId = fileInfo.parentId || rootFolderId || '';
 
-    // Trimble verwacht multipart/form-data met:
-    // - 'data': het bestand als Blob met expliciete content-type
-    // - 'projectId', 'parentId', 'name' als tekstvelden
-    const form = new FormData();
-    form.append('projectId', projectId);
-    form.append('name', outputName);
-    form.append('parentId', targetParentId);
-    // Expliciete content-type op de blob zelf meegeven
-    const uploadBlob = new Blob([blob], { type: 'application/octet-stream' });
-    form.append('data', uploadBlob, outputName);
+    // Trimble upload werkt in 3 stappen:
+    // 1. POST /files/fs/initiate  → geeft pre-signed S3 upload URL terug
+    // 2. PUT naar S3 URL          → upload de bytes direct naar AWS
+    // 3. POST /files/fs/commit    → bevestig aan Trimble dat upload klaar is
 
-    // Upload endpoint: POST /files
-    const uploaded = await proxyPost(`/files`, form);
+    // Stap 1: initiate
+    log('Upload initiate...', 'info');
+    const initResp = await proxyJsonPost(`/files/fs/initiate`, {
+        parentId:   targetParentId,
+        parentType: 'FOLDER',
+        name:       outputName,
+    });
+    log(`Initiate response: ${JSON.stringify(initResp).substring(0, 100)}`, 'info');
+
+    const uploadUrl = initResp.url || initResp.uploadUrl || initResp.putUrl || initResp.fileServiceUrl;
+    if (!uploadUrl) throw new Error(`Geen upload URL in initiate response: ${JSON.stringify(initResp)}`);
+    log('Upload URL verkregen ✓', 'ok');
+
+    // Stap 2: PUT naar S3 (geen auth header nodig — pre-signed URL)
+    log('Uploaden naar fileservice...', 'info');
+    const s3Resp = await fetch(uploadUrl, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body:    blob,
+    });
+    if (!s3Resp.ok) throw new Error(`S3 upload mislukt: HTTP ${s3Resp.status}`);
+    log('Bestand op S3 ✓', 'ok');
+
+    // Stap 3: commit
+    log('Upload committen...', 'info');
+    const uploaded = await proxyJsonPost(`/files/fs/commit`, initResp);
     log(`Upload geslaagd ✓ (id: ${uploaded.id})`, 'ok');
 
     // Model als overlay toevoegen in de viewer
