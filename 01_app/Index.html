@@ -123,7 +123,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE testscript — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step3">
         <div class="step-header">
@@ -405,57 +405,29 @@ async function runFallProtectionScript(model, onProgress) {
     log('⚠ TESTSCRIPT: dupliceert bestand zonder verwerking', 'warn');
     onProgress(5, '[TEST] Download-URL ophalen...');
 
-    // Trimble download werkt via een pre-signed AWS fileservice URL.
-    // De worker onderschept de redirect van /binarydata en geeft de Location URL terug.
-    // Die URL downloaden we dan direct zonder auth.
-    let sourceBytes;
+    // Correct Trimble endpoint (gevonden via F12 Network tab):
+    // GET /files/fs/{fileId}/downloadurl?versionId={fileId}&format=trb
+    // Dit geeft een JSON terug met een pre-signed AWS fileservice URL.
+    // format=trb is het Trimble interne formaat — format=ifc geeft het originele IFC terug.
+    const dlUrlResp = await proxyGet(
+        `/files/fs/${model.id}/downloadurl?versionId=${model.id}&format=ifc`
+    );
 
-    // Stap 1: probeer /binarydata — worker geeft { downloadUrl } terug als Trimble redirect stuurt
-    const bdResp = await fetch(`${PROXY_BASE}/files/${model.id}/binarydata?region=${projectRegion}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/octet-stream' }
-    });
+    // Response bevat de pre-signed URL
+    const downloadUrl = dlUrlResp.url || dlUrlResp.downloadUrl || dlUrlResp.fileUrl
+        || (typeof dlUrlResp === 'string' ? dlUrlResp : null);
 
-    const bdCt = bdResp.headers.get('content-type') || '';
-
-    if (bdResp.ok && bdCt.includes('json')) {
-        // Worker heeft de redirect onderschept en geeft downloadUrl terug
-        const bdJson = await bdResp.json();
-        if (bdJson.downloadUrl) {
-            log(`Pre-signed URL verkregen ✓`, 'ok');
-            onProgress(20, '[TEST] Bestand downloaden van fileservice...');
-            const fileResp = await fetch(bdJson.downloadUrl);
-            if (!fileResp.ok) throw new Error(`Fileservice download mislukt: HTTP ${fileResp.status}`);
-            sourceBytes = await fileResp.arrayBuffer();
-        }
-    } else if (bdResp.ok && !bdCt.includes('json')) {
-        // Direct binaire data teruggekomen
-        sourceBytes = await bdResp.arrayBuffer();
+    if (!downloadUrl) {
+        throw new Error(`Geen download URL in response: ${JSON.stringify(dlUrlResp)}`);
     }
 
-    // Stap 2: fallback via /transfer
-    if (!sourceBytes) {
-        log(`binarydata mislukt, probeer /transfer...`, 'warn');
-        const tfResp = await fetch(`${PROXY_BASE}/files/${model.id}/transfer?region=${projectRegion}`, {
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/octet-stream' }
-        });
-        const tfCt = tfResp.headers.get('content-type') || '';
-        if (tfResp.ok && tfCt.includes('json')) {
-            const tfJson = await tfResp.json();
-            const dlUrl = tfJson.downloadUrl || tfJson.url || tfJson.transferUrl;
-            if (dlUrl) {
-                const fileResp = await fetch(dlUrl);
-                if (!fileResp.ok) throw new Error(`Transfer download mislukt: HTTP ${fileResp.status}`);
-                sourceBytes = await fileResp.arrayBuffer();
-            } else {
-                throw new Error(`Geen download URL in transfer response: ${JSON.stringify(tfJson)}`);
-            }
-        } else if (tfResp.ok) {
-            sourceBytes = await tfResp.arrayBuffer();
-        } else {
-            const errText = await tfResp.text().catch(() => '');
-            throw new Error(`Download mislukt (HTTP ${tfResp.status}): ${errText.substring(0,200)}`);
-        }
-    }
+    log(`Download-URL verkregen ✓`, 'ok');
+    onProgress(20, '[TEST] Bestand downloaden van fileservice...');
+
+    // Pre-signed URL direct ophalen — geen auth header nodig
+    const fileResp = await fetch(downloadUrl);
+    if (!fileResp.ok) throw new Error(`Fileservice download mislukt: HTTP ${fileResp.status}`);
+    const sourceBytes = await fileResp.arrayBuffer();
 
     if (!sourceBytes || sourceBytes.byteLength === 0) {
         throw new Error('Download leeg — geen bytes ontvangen.');
