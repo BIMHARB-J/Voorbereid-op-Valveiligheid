@@ -459,15 +459,19 @@ async function uploadAndShowIfc(blob, sourceModel) {
     log(`Uploaden als: ${outputName}`, 'info');
 
     // parentId ophalen uit de fileinfo van het bronmodel
-    // (ligt in dezelfde map als het bronmodel)
     const fileInfo = await proxyGet(`/files/${sourceModel.id}`);
     const targetParentId = fileInfo.parentId || rootFolderId || '';
 
+    // Trimble verwacht multipart/form-data met:
+    // - 'data': het bestand als Blob met expliciete content-type
+    // - 'projectId', 'parentId', 'name' als tekstvelden
     const form = new FormData();
     form.append('projectId', projectId);
     form.append('name', outputName);
     form.append('parentId', targetParentId);
-    form.append('data', blob, outputName);
+    // Expliciete content-type op de blob zelf meegeven
+    const uploadBlob = new Blob([blob], { type: 'application/octet-stream' });
+    form.append('data', uploadBlob, outputName);
 
     // Upload endpoint: POST /files
     const uploaded = await proxyPost(`/files`, form);
