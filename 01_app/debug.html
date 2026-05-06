@@ -2,120 +2,102 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug - Upload endpoint</title>
+<title>EP Debug - Initiate/Commit</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
   .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
   .ok { border-color: #22c55e; } .err { border-color: #ef4444; color: #ef4444; }
-  .warn { border-color: #f59e0b; color: #f59e0b; }
-  button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 4px 2px; }
+  button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug — Upload endpoint testen</h1>
+<h1 style="color:#00c8ff">EP Debug — Initiate/Commit upload test</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="testUploads()">▶ Test upload varianten</button>
+<button onclick="testUpload()">▶ Test volledige upload flow</button>
 <div id="out"></div>
-
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
 let token, pid, region, parentId;
 
 function add(label, status, body) {
-  const ok = status >= 200 && status < 300;
+  const ok = !status || (status >= 200 && status < 300);
   document.getElementById('out').innerHTML +=
-    `<h2>${label} → HTTP ${status}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,600):JSON.stringify(body,null,2)}</div>`;
+    `<h2>${label}${status?' → HTTP '+status:''}</h2>
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,800):JSON.stringify(body,null,2)}</div>`;
 }
 
-// Maak een minimaal geldig IFC bestand voor test-uploads
-function makeTestIfc() {
-  const ifc = `ISO-10303-21;
-HEADER;
-FILE_DESCRIPTION(('Test'),'2;1');
-FILE_NAME('test.ifc','2026-01-01T00:00:00',(''),(''),'','','');
-FILE_SCHEMA(('IFC4'));
-ENDSEC;
-DATA;
-ENDSEC;
-END-ISO-10303-21;`;
-  return new Blob([ifc], { type: 'application/octet-stream' });
-}
-
-async function testUploads() {
-  document.getElementById('out').innerHTML = '';
-  const blob = makeTestIfc();
-  const name = 'EP_upload_test.ifc';
-
-  // Test 1: multipart met veldnaam 'data'
-  const f1 = new FormData();
-  f1.append('projectId', pid);
-  f1.append('parentId', parentId);
-  f1.append('name', name);
-  f1.append('data', blob, name);
-  const r1 = await fetch(`${PROXY}/api/files?region=${region}`, {
-    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f1
-  });
-  let b1; try { b1 = await r1.json(); } catch { b1 = await r1.text(); }
-  add("multipart veld 'data'", r1.status, b1);
-
-  // Test 2: multipart met veldnaam 'file'
-  const f2 = new FormData();
-  f2.append('projectId', pid);
-  f2.append('parentId', parentId);
-  f2.append('name', name);
-  f2.append('file', blob, name);
-  const r2 = await fetch(`${PROXY}/api/files?region=${region}`, {
-    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f2
-  });
-  let b2; try { b2 = await r2.json(); } catch { b2 = await r2.text(); }
-  add("multipart veld 'file'", r2.status, b2);
-
-  // Test 3: multipart met veldnaam 'content'
-  const f3 = new FormData();
-  f3.append('projectId', pid);
-  f3.append('parentId', parentId);
-  f3.append('name', name);
-  f3.append('content', blob, name);
-  const r3 = await fetch(`${PROXY}/api/files?region=${region}`, {
-    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f3
-  });
-  let b3; try { b3 = await r3.json(); } catch { b3 = await r3.text(); }
-  add("multipart veld 'content'", r3.status, b3);
-
-  // Test 4: PUT in plaats van POST
-  const f4 = new FormData();
-  f4.append('projectId', pid);
-  f4.append('parentId', parentId);
-  f4.append('name', name);
-  f4.append('data', blob, name);
-  const r4 = await fetch(`${PROXY}/api/files?region=${region}`, {
-    method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: f4
-  });
-  let b4; try { b4 = await r4.json(); } catch { b4 = await r4.text(); }
-  add("PUT multipart veld 'data'", r4.status, b4);
-
-  // Test 5: raw binary upload via PUT /files/{parentId}/upload
-  const r5 = await fetch(`${PROXY}/api/files/${parentId}/upload?region=${region}&name=${encodeURIComponent(name)}`, {
+async function proxyPost(path, body, isJson) {
+  const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/octet-stream' },
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      ...(isJson ? { 'Content-Type': 'application/json', 'Accept': 'application/json' } : { 'Accept': 'application/json' })
+    },
+    body: isJson ? JSON.stringify(body) : body
+  });
+  let b; try { b = await r.json(); } catch { b = await r.text(); }
+  return { status: r.status, body: b };
+}
+
+function makeTestIfc(name) {
+  return new Blob([`ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('Test'),'2;1');\nFILE_NAME('${name}','2026-01-01T00:00:00',(''),(''),'','','');\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n`],
+    { type: 'application/octet-stream' });
+}
+
+async function testUpload() {
+  document.getElementById('out').innerHTML = '';
+  const name = 'EP_test_upload.ifc';
+  const blob = makeTestIfc(name);
+
+  // Stap 1: /files/fs/initiate — vraag upload URL aan
+  // We weten niet exact welke velden nodig zijn, probeer varianten
+  const initiatePayloads = [
+    { name, parentId, projectId: pid, size: blob.size },
+    { name, parentId, projectId: pid },
+    { fileName: name, parentId, projectId: pid, fileSize: blob.size },
+    { name, folderId: parentId, projectId: pid, size: blob.size },
+  ];
+
+  let uploadUrl = null;
+  let initiateResp = null;
+
+  for (const payload of initiatePayloads) {
+    const r = await proxyPost('/files/fs/initiate', payload, true);
+    add(`POST /files/fs/initiate (${JSON.stringify(payload).substring(0,60)})`, r.status, r.body);
+    if (r.status >= 200 && r.status < 300) {
+      uploadUrl = r.body.url || r.body.uploadUrl || r.body.fileServiceUrl || r.body.putUrl;
+      initiateResp = r.body;
+      add('✓ Initiate geslaagd — upload URL', '', uploadUrl || 'URL niet gevonden in response');
+      break;
+    }
+  }
+
+  if (!uploadUrl) {
+    add('Initiate mislukt', '', 'Geen geldige upload URL verkregen — controleer de response hierboven');
+    return;
+  }
+
+  // Stap 2: PUT naar de fileservice S3 URL
+  add('Uploaden naar fileservice...', '', uploadUrl.substring(0, 80) + '...');
+  const s3Resp = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/octet-stream' },
     body: blob
   });
-  let b5; try { b5 = await r5.json(); } catch { b5 = await r5.text(); }
-  add("POST binary naar /files/{parentId}/upload", r5.status, b5);
+  add('PUT naar fileservice (S3)', s3Resp.status, `content-type: ${s3Resp.headers.get('content-type')}, bytes: ${blob.size}`);
 
-  // Test 6: upload via /projects/{pid}/files met multipart
-  const f6 = new FormData();
-  f6.append('parentId', parentId);
-  f6.append('name', name);
-  f6.append('data', blob, name);
-  const r6 = await fetch(`${PROXY}/api/projects/${pid}/files?region=${region}`, {
-    method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: f6
-  });
-  let b6; try { b6 = await r6.json(); } catch { b6 = await r6.text(); }
-  add("POST multipart naar /projects/{pid}/files", r6.status, b6);
+  if (!s3Resp.ok) {
+    add('S3 upload mislukt', '', await s3Resp.text());
+    return;
+  }
+
+  // Stap 3: /files/fs/commit — bevestig de upload
+  // Stuur de initiateResp data terug zodat Trimble weet welk bestand het is
+  const commitPayload = initiateResp;
+  const cr = await proxyPost('/files/fs/commit', commitPayload, true);
+  add('POST /files/fs/commit', cr.status, cr.body);
 }
 
 (async () => {
@@ -128,16 +110,13 @@ async function testUploads() {
     const p = await API.project.getProject();
     pid    = p.id;
     region = (p.location||'europe').toLowerCase().split(' ')[0];
-    // parentId ophalen van het eerste model
     const viewer = await API.viewer;
     const models = await viewer.getModels();
-    const fileId = models[0].id;
-    const fi = await (await fetch(`${PROXY}/api/files/${fileId}?region=${region}`, {
+    const fi = await (await fetch(`${PROXY}/api/files/${models[0].id}?region=${region}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })).json();
     parentId = fi.parentId;
-    document.getElementById('st').textContent =
-      `✓ project: ${p.name} | parentId: ${parentId} | regio: ${region}`;
+    document.getElementById('st').textContent = `✓ parentId: ${parentId}`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;
