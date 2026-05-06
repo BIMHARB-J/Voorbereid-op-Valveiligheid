@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP dientVERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -510,7 +510,10 @@ async function uploadAndShowIfc(blob, sourceModel) {
 
     // Stap 3: commit
     log('Upload committen...', 'info');
-    const uploaded = await proxyJsonPost(`/files/fs/commit`, initResp);
+    // Commit: stuur alleen uploadId
+    const commitPayload = { uploadId: initResp.uploadId };
+    log(`Commit payload: ${JSON.stringify(commitPayload)}`, 'info');
+    const uploaded = await proxyJsonPost(`/files/fs/commit`, commitPayload);
     log(`Upload geslaagd ✓ (id: ${uploaded.id})`, 'ok');
 
     // Model als overlay toevoegen in de viewer
