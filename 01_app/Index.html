@@ -123,7 +123,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE testscript — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step3">
         <div class="step-header">
@@ -409,8 +409,10 @@ async function runFallProtectionScript(model, onProgress) {
     // GET /files/fs/{fileId}/downloadurl?versionId={fileId}&format=trb
     // Dit geeft een JSON terug met een pre-signed AWS fileservice URL.
     // format=trb is het Trimble interne formaat — format=ifc geeft het originele IFC terug.
+    // format=trb is het enige geldige formaat (Trimble intern formaat)
+    // format=ifc bestaat niet als parameter
     const dlUrlResp = await proxyGet(
-        `/files/fs/${model.id}/downloadurl?versionId=${model.id}&format=ifc`
+        `/files/fs/${model.id}/downloadurl?versionId=${model.id}&format=trb`
     );
 
     // Response bevat de pre-signed URL
