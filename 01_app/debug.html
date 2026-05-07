@@ -2,102 +2,62 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>EP Debug - Initiate/Commit</title>
+<title>EP Debug - format varianten</title>
 <style>
   body { font-family: monospace; background: #0d0f14; color: #e2e8f0; padding: 20px; font-size: 12px; }
   h2 { color: #00c8ff; margin: 12px 0 4px; }
-  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+  .r { background: #161a22; border: 1px solid #252b38; border-radius: 6px; padding: 10px; margin: 4px 0 10px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
   .ok { border-color: #22c55e; } .err { border-color: #ef4444; color: #ef4444; }
   button { background: #00c8ff; color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 </style>
 </head>
 <body>
-<h1 style="color:#00c8ff">EP Debug — Initiate/Commit upload test</h1>
+<h1 style="color:#00c8ff">EP Debug — format varianten + origineel bestand</h1>
 <div id="st">Verbinden...</div><br>
-<button onclick="testUpload()">▶ Test volledige upload flow</button>
+<button onclick="run()">▶ Test alle format opties</button>
 <div id="out"></div>
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 const PROXY = 'https://edgeprotector.jja-hoven.workers.dev';
-let token, pid, region, parentId;
+let token, pid, region, fileId;
 
 function add(label, status, body) {
-  const ok = !status || (status >= 200 && status < 300);
+  const ok = status >= 200 && status < 300;
   document.getElementById('out').innerHTML +=
-    `<h2>${label}${status?' → HTTP '+status:''}</h2>
-     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,800):JSON.stringify(body,null,2)}</div>`;
+    `<h2>${label} → HTTP ${status}</h2>
+     <div class="r ${ok?'ok':'err'}">${typeof body==='string'?body.substring(0,500):JSON.stringify(body,null,2)}</div>`;
 }
 
-async function proxyPost(path, body, isJson) {
+async function get(path) {
   const r = await fetch(`${PROXY}/api${path}?region=${region}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      ...(isJson ? { 'Content-Type': 'application/json', 'Accept': 'application/json' } : { 'Accept': 'application/json' })
-    },
-    body: isJson ? JSON.stringify(body) : body
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
   });
   let b; try { b = await r.json(); } catch { b = await r.text(); }
   return { status: r.status, body: b };
 }
 
-function makeTestIfc(name) {
-  return new Blob([`ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('Test'),'2;1');\nFILE_NAME('${name}','2026-01-01T00:00:00',(''),(''),'','','');\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n`],
-    { type: 'application/octet-stream' });
-}
-
-async function testUpload() {
+async function run() {
   document.getElementById('out').innerHTML = '';
-  const name = 'EP_test_upload.ifc';
-  const blob = makeTestIfc(name);
 
-  // Stap 1: /files/fs/initiate — vraag upload URL aan
-  // We weten niet exact welke velden nodig zijn, probeer varianten
-  const initiatePayloads = [
-    { name, parentId, projectId: pid, size: blob.size },
-    { name, parentId, projectId: pid },
-    { fileName: name, parentId, projectId: pid, fileSize: blob.size },
-    { name, folderId: parentId, projectId: pid, size: blob.size },
-  ];
-
-  let uploadUrl = null;
-  let initiateResp = null;
-
-  for (const payload of initiatePayloads) {
-    const r = await proxyPost('/files/fs/initiate', payload, true);
-    add(`POST /files/fs/initiate (${JSON.stringify(payload).substring(0,60)})`, r.status, r.body);
-    if (r.status >= 200 && r.status < 300) {
-      uploadUrl = r.body.url || r.body.uploadUrl || r.body.fileServiceUrl || r.body.putUrl;
-      initiateResp = r.body;
-      add('✓ Initiate geslaagd — upload URL', '', uploadUrl || 'URL niet gevonden in response');
-      break;
-    }
+  // Test alle mogelijke format waarden
+  const formats = ['trb', 'original', 'ifc', 'ifczip', 'source', 'native', 'raw', 'upload'];
+  for (const fmt of formats) {
+    const r = await get(`/files/fs/${fileId}/downloadurl?versionId=${fileId}&format=${fmt}`);
+    const hasUrl = r.status === 200 && (r.body.uploadURL || r.body.url || r.body.downloadURL);
+    add(
+      `/files/fs/${fileId}/downloadurl?format=${fmt}${hasUrl ? ' ✓' : ''}`,
+      r.status,
+      r.body
+    );
   }
 
-  if (!uploadUrl) {
-    add('Initiate mislukt', '', 'Geen geldige upload URL verkregen — controleer de response hierboven');
-    return;
-  }
+  // Test ook zonder format parameter
+  const r0 = await get(`/files/fs/${fileId}/downloadurl?versionId=${fileId}`);
+  add(`/files/fs/${fileId}/downloadurl (geen format)`, r0.status, r0.body);
 
-  // Stap 2: PUT naar de fileservice S3 URL
-  add('Uploaden naar fileservice...', '', uploadUrl.substring(0, 80) + '...');
-  const s3Resp = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/octet-stream' },
-    body: blob
-  });
-  add('PUT naar fileservice (S3)', s3Resp.status, `content-type: ${s3Resp.headers.get('content-type')}, bytes: ${blob.size}`);
-
-  if (!s3Resp.ok) {
-    add('S3 upload mislukt', '', await s3Resp.text());
-    return;
-  }
-
-  // Stap 3: /files/fs/commit — bevestig de upload
-  // Stuur de initiateResp data terug zodat Trimble weet welk bestand het is
-  const commitPayload = initiateResp;
-  const cr = await proxyPost('/files/fs/commit', commitPayload, true);
-  add('POST /files/fs/commit', cr.status, cr.body);
+  // Kijk of er een apart "versions" endpoint is met het originele bestand
+  const rv = await get(`/files/${fileId}/versions`);
+  add(`/files/${fileId}/versions`, rv.status, rv.body);
 }
 
 (async () => {
@@ -112,11 +72,8 @@ async function testUpload() {
     region = (p.location||'europe').toLowerCase().split(' ')[0];
     const viewer = await API.viewer;
     const models = await viewer.getModels();
-    const fi = await (await fetch(`${PROXY}/api/files/${models[0].id}?region=${region}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })).json();
-    parentId = fi.parentId;
-    document.getElementById('st').textContent = `✓ parentId: ${parentId}`;
+    fileId = models[0].id;
+    document.getElementById('st').textContent = `✓ file: ${models[0].name} (${fileId})`;
     document.getElementById('st').style.color = '#22c55e';
   } catch(e) {
     document.getElementById('st').textContent = 'Fout: ' + e.message;

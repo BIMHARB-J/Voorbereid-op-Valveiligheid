@@ -1,82 +1,105 @@
-/**
- * EdgeProtector — Cloudflare Worker (CORS proxy voor Trimble REST API)
- *
- * Deploy stappen:
- *  1. Ga naar https://workers.cloudflare.com en maak een gratis account
- *  2. Klik "Create Worker"
- *  3. Plak deze hele file in de editor
- *  4. Klik "Save and Deploy"
- *  5. Kopieer de worker-URL (bijv. https://edgeprotector.jouwnaam.workers.dev)
- *  6. Plak die URL als PROXY_BASE in edgeprotector.html
- */
+const TRIMBLE_MASTER = 'https://app.connect.trimble.com/tc/api/2.0';
+const regionCache = new Map();
 
-const ALLOWED_ORIGIN_CONTAINS = 'connect.trimble.com';
-const TRIMBLE_BASE = 'https://app.eu.connect.trimble.com/tc/api/2.0';
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request));
+});
 
-export default {
-  async fetch(request, env, ctx) {
+async function handleRequest(request) {
+  if (request.method === 'OPTIONS') return corsWrap(new Response(null, { status: 204 }));
 
-    // OPTIONS preflight — altijd toestaan
-    if (request.method === 'OPTIONS') {
-      return corsResponse(new Response(null, { status: 204 }));
-    }
+  const url = new URL(request.url);
 
-    const url = new URL(request.url);
+  if (url.pathname === '/ping') return corsWrap(new Response('pong', { status: 200 }));
 
-    // Health check: GET /ping
-    if (url.pathname === '/ping') {
-      return corsResponse(new Response('pong', { status: 200 }));
-    }
+  const isApi  = url.pathname.startsWith('/api/');
+  const isWopi = url.pathname.startsWith('/wopi/');
+  if (!isApi && !isWopi) {
+    return corsWrap(new Response('Not found', { status: 404 }));
+  }
 
-    // Alleen /api/* paden proxyen
-    if (!url.pathname.startsWith('/api/')) {
-      return corsResponse(new Response('Not found', { status: 404 }));
-    }
+  const auth = request.headers.get('Authorization');
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return corsWrap(new Response('Unauthorized', { status: 401 }));
+  }
 
-    // Authorization header verplicht — de extensie stuurt het Bearer token mee
-    const auth = request.headers.get('Authorization');
-    if (!auth || !auth.startsWith('Bearer ')) {
-      return corsResponse(new Response('Unauthorized', { status: 401 }));
-    }
+  const region    = (url.searchParams.get('region') || 'europe').toLowerCase();
+  const tcApiBase = await resolveRegionUrl(auth, region);
 
-    // Bouw de Trimble doel-URL
-    // /api/projects/XYZ/files → TRIMBLE_BASE/projects/XYZ/files
-    const trimblePath = url.pathname.replace('/api/', '/');
-    const trimbleUrl  = TRIMBLE_BASE + trimblePath + url.search;
+  const trimblePath   = isApi ? url.pathname.replace('/api', '') : url.pathname;
+  const forwardParams = new URLSearchParams(url.search);
+  forwardParams.delete('region');
+  const qs         = forwardParams.toString();
+  const trimbleUrl = tcApiBase + trimblePath + (qs ? '?' + qs : '');
 
-    // Stuur het verzoek door naar Trimble
-    const proxyReq = new Request(trimbleUrl, {
-      method:  request.method,
-      headers: {
-        'Authorization': auth,
-        'Accept':        'application/json',
-        'Content-Type':  request.headers.get('Content-Type') || 'application/json',
-      },
-      body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
+  // --- Headers opbouwen ---
+  const headers = new Headers();
+  headers.set('Authorization', auth);
+  headers.set('Accept', request.headers.get('Accept') || 'application/json');
+
+  const ct = request.headers.get('Content-Type') || '';
+  // multipart/form-data NIET doorsturen: de boundary zit embedded in de body stream.
+  // Cloudflare herstelt de boundary automatisch als je hem weglaat.
+  // Alle andere content-types wel doorsturen.
+  if (ct && !ct.toLowerCase().includes('multipart')) {
+    headers.set('Content-Type', ct);
+  }
+
+  // --- Request doorsturen ---
+  const isDownload = trimblePath.includes('/binarydata') || trimblePath.includes('/transfer');
+  const hasBody    = !['GET', 'HEAD'].includes(request.method);
+
+  let upstream;
+  try {
+    upstream = await fetch(trimbleUrl, {
+      method:   request.method,
+      headers:  headers,
+      body:     hasBody ? request.body : undefined,
+      redirect: isDownload ? 'manual' : 'follow',
     });
+  } catch (e) {
+    return corsWrap(new Response('Upstream fout: ' + e.message, { status: 502 }));
+  }
 
-    let trimbleResp;
-    try {
-      trimbleResp = await fetch(proxyReq);
-    } catch (e) {
-      return corsResponse(new Response(`Upstream error: ${e.message}`, { status: 502 }));
-    }
-
-    // Antwoord doorsturen inclusief CORS headers
-    const respBody    = await trimbleResp.arrayBuffer();
-    const respHeaders = new Headers({
-      'Content-Type':  trimbleResp.headers.get('Content-Type') || 'application/octet-stream',
-      'X-Proxy-Status': trimbleResp.status,
-    });
-
-    return corsResponse(new Response(respBody, {
-      status:  trimbleResp.status,
-      headers: respHeaders,
+  // Redirect onderscheppen voor download endpoints
+  if (isDownload && [301, 302, 303].includes(upstream.status)) {
+    const location = upstream.headers.get('location');
+    return corsWrap(new Response(JSON.stringify({ downloadUrl: location }), {
+      status:  200,
+      headers: { 'Content-Type': 'application/json' },
     }));
   }
-};
 
-function corsResponse(response) {
+  const body        = await upstream.arrayBuffer();
+  const contentType = upstream.headers.get('Content-Type') || 'application/octet-stream';
+  return corsWrap(new Response(body, {
+    status:  upstream.status,
+    headers: { 'Content-Type': contentType },
+  }));
+}
+
+async function resolveRegionUrl(auth, regionLabel) {
+  const key = regionLabel.toLowerCase().trim();
+  if (regionCache.has(key)) return regionCache.get(key);
+
+  try {
+    const resp = await fetch(TRIMBLE_MASTER + '/regions', {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    });
+    if (resp.ok) {
+      const list = await resp.json();
+      for (const r of list) {
+        if (r['tc-api']) {
+          regionCache.set((r.location || '').toLowerCase(), r['tc-api'].replace(/\/$/, ''));
+        }
+      }
+    }
+  } catch (e) {}
+
+  return regionCache.get(key) || TRIMBLE_MASTER;
+}
+
+function corsWrap(response) {
   const r = new Response(response.body, response);
   r.headers.set('Access-Control-Allow-Origin',  '*');
   r.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
