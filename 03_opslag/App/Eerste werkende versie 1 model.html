@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EdgeProtector</title>
+    <title>Valwijzer</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
 
@@ -108,7 +108,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP dientVERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -424,18 +424,20 @@ async function runFallProtectionScript(model, onProgress) {
     onProgress(5, '[TEST] Download-URL ophalen...');
 
     // Correct Trimble endpoint (gevonden via F12 Network tab):
-    // GET /files/fs/{fileId}/downloadurl?versionId={fileId}&format=trb
-    // Dit geeft een JSON terug met een pre-signed AWS fileservice URL.
-    // format=trb is het Trimble interne formaat — format=ifc geeft het originele IFC terug.
-    // format=trb is het enige geldige formaat (Trimble intern formaat)
-    // format=ifc bestaat niet als parameter
+    // GET /files/fs/{fileId}/downloadurl?versionId={versionId}
+    // Geen format parameter — geeft het originele geüploade bestand terug (IFC).
+    // De versionId kan afwijken van de fileId — ophalen via /files/{id}.
+    const fileInfo = await proxyGet(`/files/${model.id}`);
+    const dlVersionId = fileInfo.versionId || model.id;
+    log(`versionId: ${dlVersionId}`, 'info');
+
     const dlUrlResp = await proxyGet(
-        `/files/fs/${model.id}/downloadurl?versionId=${model.id}&format=trb`
+        `/files/fs/${model.id}/downloadurl?versionId=${dlVersionId}`
     );
 
     // Response bevat de pre-signed URL
-    const downloadUrl = dlUrlResp.url || dlUrlResp.downloadUrl || dlUrlResp.fileUrl
-        || (typeof dlUrlResp === 'string' ? dlUrlResp : null);
+    const downloadUrl = dlUrlResp.uploadURL || dlUrlResp.url || dlUrlResp.downloadUrl
+        || dlUrlResp.fileUrl || (typeof dlUrlResp === 'string' ? dlUrlResp : null);
 
     if (!downloadUrl) {
         throw new Error(`Geen download URL in response: ${JSON.stringify(dlUrlResp)}`);
