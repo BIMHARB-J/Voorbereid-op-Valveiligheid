@@ -92,7 +92,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;deze STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -336,31 +336,20 @@ async function getActiveModel() {
     }
     if (!models || models.length === 0) throw new Error('Geen modellen geladen in de viewer.');
 
-    // Probeer actief geselecteerd model te pakken
-    let selectedId = null;
-    try {
-        const selection = await viewer.getSelection();
-        if (selection && selection.length > 0) {
-            selectedId = selection[0].modelId || selection[0].fileId || null;
-            if (selectedId) log(`Selectie model id: ${selectedId}`, 'info');
-        }
-    } catch (e) { log(`viewer.getSelection() niet beschikbaar: ${e.message}`, 'warn'); }
-
+    // Altijd keuzemenu tonen als er meerdere modellen zijn
+    // (viewer.getSelection() geeft object-selecties terug, niet model-selecties)
     let model = null;
-    if (selectedId) {
-        model = models.find(m => m.id === selectedId || m.modelId === selectedId);
-        if (model) log(`Actief model via selectie: "${model.name}"`, 'ok');
-    }
+    const ifcModels = models.filter(m => m.name && m.name.toLowerCase().endsWith('.ifc'));
 
-    // Keuzemenu als meerdere modellen en geen selectie
-    if (!model && models.length > 1) {
+    if (ifcModels.length === 1) {
+        model = ifcModels[0];
+        log(`Enkel model gevonden: "${model.name}"`, 'ok');
+    } else if (ifcModels.length > 1) {
+        log(`${ifcModels.length} modellen gevonden — keuzemenu tonen`, 'info');
         model = await askUserToSelectModel(models);
-        log(`Model gekozen via keuzemenu: "${model.name}"`, 'ok');
-    }
-
-    // Fallback: eerste IFC
-    if (!model) {
-        model = models.find(m => m.name && m.name.toLowerCase().endsWith('.ifc')) || models[0];
+        log(`Model gekozen: "${model.name}"`, 'ok');
+    } else {
+        model = models[0];
         log(`Fallback: "${model.name}"`, 'warn');
     }
 
