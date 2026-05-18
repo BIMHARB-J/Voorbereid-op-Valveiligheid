@@ -6,7 +6,6 @@
     <title>EdgeProtector</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
-
         :root {
             --bg: #0d0f14; --surface: #161a22; --border: #252b38;
             --accent: #00c8ff; --accent2: #ff6b35; --text: #e2e8f0;
@@ -14,18 +13,15 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; font-size: 14px; }
-
         header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
         .logo { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; color: #000; flex-shrink: 0; }
         header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
         header span { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
-
         .steps { display: flex; flex-direction: column; gap: 12px; }
         .step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: border-color 0.2s; }
         .step.active { border-color: var(--accent); }
         .step.done   { border-color: var(--success); }
         .step.error  { border-color: var(--error); }
-
         .step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
         .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; flex-shrink: 0; transition: background 0.2s, color 0.2s; }
         .step.active .step-num { background: var(--accent); color: #000; }
@@ -34,12 +30,10 @@
         .step-title { font-weight: 600; font-size: 13px; }
         .step-body { font-size: 12px; color: var(--muted); line-height: 1.6; padding-left: 34px; }
         .step-body.visible { color: var(--text); }
-
         .model-info { background: rgba(0,200,255,0.06); border: 1px solid rgba(0,200,255,0.2); border-radius: 6px; padding: 10px 12px; margin-top: 8px; display: none; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.8; }
         .model-info.show { display: block; }
         .model-info .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; }
         .model-info .value { color: var(--accent); word-break: break-all; }
-
         .progress-wrap { margin-top: 10px; display: none; }
         .progress-wrap.show { display: block; }
         .progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
@@ -47,16 +41,13 @@
         .progress-fill.indeterminate { width: 40%; animation: slide 1.2s ease-in-out infinite; }
         @keyframes slide { 0% { transform: translateX(-150%); } 100% { transform: translateX(350%); } }
         .progress-label { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
-
         .btn-primary { width: 100%; padding: 12px; background: var(--accent); color: #000; border: none; border-radius: 6px; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; transition: opacity 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .btn-primary:hover:not(:disabled) { opacity: 0.85; }
         .btn-primary:active:not(:disabled) { transform: scale(0.98); }
         .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
         .btn-secondary { width: 100%; padding: 10px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; cursor: pointer; margin-top: 8px; transition: border-color 0.2s; }
         .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
-
-        .test-banner { background: rgba(245,158,11,0.08); border: 1px dashed var(--warning); border-radius: 6px; padding: 8px 12px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--warning); line-height: 1.6; text-align: center; margin-bottom: 0; }
-
+        .test-banner { background: rgba(245,158,11,0.08); border: 1px dashed var(--warning); border-radius: 6px; padding: 8px 12px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--warning); line-height: 1.6; text-align: center; }
         .log { background: #08090c; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-top: 12px; max-height: 160px; overflow-y: auto; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.7; display: none; }
         .log.show { display: block; }
         .log-line      { color: var(--muted); }
@@ -64,23 +55,20 @@
         .log-line.err  { color: var(--error); }
         .log-line.info { color: var(--accent); }
         .log-line.warn { color: var(--warning); }
-
         .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-family: 'IBM Plex Mono', monospace; padding: 2px 8px; border-radius: 20px; margin-left: auto; }
         .badge.idle    { background: rgba(100,116,139,0.15); color: var(--muted); }
-        .badge.running { background: rgba(0,200,255,0.12);   color: var(--accent); }
-        .badge.ok      { background: rgba(34,197,94,0.12);   color: var(--success); }
-        .badge.fail    { background: rgba(239,68,68,0.12);   color: var(--error); }
+        .badge.running { background: rgba(0,200,255,0.12); color: var(--accent); }
+        .badge.ok      { background: rgba(34,197,94,0.12); color: var(--success); }
+        .badge.fail    { background: rgba(239,68,68,0.12); color: var(--error); }
         .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
         .dot.pulse { animation: pulse 1s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-
         .ifc-result { background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2); border-radius: 6px; padding: 10px 12px; margin-top: 8px; display: none; font-size: 12px; }
         .ifc-result.show { display: block; }
         .ifc-result strong { color: var(--success); }
     </style>
 </head>
 <body>
-
 <header>
     <div class="logo">EP</div>
     <div>
@@ -90,7 +78,6 @@
 </header>
 
 <div class="steps">
-
     <div class="step" id="step1">
         <div class="step-header">
             <div class="step-num">1</div>
@@ -99,16 +86,13 @@
         </div>
         <div class="step-body" id="body1">Verbinding maken met de 3D viewer en het actieve IFC model ophalen.</div>
         <div class="model-info" id="modelInfo">
-            <div class="label">Model naam</div>
-            <div class="value" id="infoName">—</div>
-            <div class="label" style="margin-top:6px">Model ID</div>
-            <div class="value" id="infoId">—</div>
-            <div class="label" style="margin-top:6px">Versie ID</div>
-            <div class="value" id="infoVer">—</div>
+            <div class="label">Model naam</div><div class="value" id="infoName">—</div>
+            <div class="label" style="margin-top:6px">Model ID</div><div class="value" id="infoId">—</div>
+            <div class="label" style="margin-top:6px">Versie ID</div><div class="value" id="infoVer">—</div>
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;deze STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -123,7 +107,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:0">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step3">
         <div class="step-header">
@@ -137,7 +121,6 @@
             <span id="ifcResultText"></span>
         </div>
     </div>
-
 </div>
 
 <div class="log" id="log"></div>
@@ -150,46 +133,39 @@
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ⚙️  CONFIGURATIE — vul hier je Cloudflare Worker URL in na het deployen
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// ⚙️  CONFIGURATIE
+// ─────────────────────────────────────────────────────────────────
 const PROXY_BASE = 'https://edgeprotector.jja-hoven.workers.dev/api';
-// Voorbeeld: 'https://edgeprotector.jandevries.workers.dev/api'
-// ─────────────────────────────────────────────────────────────────────────────
 
-let API          = null;
-let accessToken  = null;
-let projectId    = null;
-    let projectRegion = 'europe';
-let currentModel = null;
-let running      = false;
+// ── State ─────────────────────────────────────────────────────────
+let API = null, accessToken = null, projectId = null, projectRegion = 'europe';
+let rootFolderId = null, currentModel = null, running = false;
 
-// ── Logging ───────────────────────────────────────────────────────────────────
+// ── Logging ───────────────────────────────────────────────────────
 function log(msg, type = '') {
     const el = document.getElementById('log');
     el.classList.add('show');
     const line = document.createElement('div');
     line.className = `log-line ${type}`;
-    const ts = new Date().toLocaleTimeString('nl-NL', { hour12: false });
-    line.textContent = `[${ts}] ${msg}`;
+    line.textContent = `[${new Date().toLocaleTimeString('nl-NL', {hour12:false})}] ${msg}`;
     el.appendChild(line);
     el.scrollTop = el.scrollHeight;
 }
 
-// ── Stap helpers ──────────────────────────────────────────────────────────────
+// ── Stap helpers ──────────────────────────────────────────────────
 function setStep(n, state) {
-    const step  = document.getElementById(`step${n}`);
+    const step = document.getElementById(`step${n}`);
     const badge = document.getElementById(`badge${n}`);
-    const body  = document.getElementById(`body${n}`);
+    const body = document.getElementById(`body${n}`);
     step.className = `step ${state === 'active' ? 'active' : state === 'done' ? 'done' : state === 'error' ? 'error' : ''}`;
-    const labels = { idle:'wacht', active:'bezig', done:'klaar', error:'fout' };
-    const cls    = { idle:'idle', active:'running', done:'ok', error:'fail' };
+    const labels = {idle:'wacht', active:'bezig', done:'klaar', error:'fout'};
+    const cls    = {idle:'idle', active:'running', done:'ok', error:'fail'};
     badge.className = `badge ${cls[state]}`;
     badge.innerHTML = `<span class="dot ${state==='active'?'pulse':''}"></span>${labels[state]}`;
     body.className  = `step-body${state !== 'idle' ? ' visible' : ''}`;
 }
-
-function showProgress(indeterminate = true, pct = 0, label = '') {
+function showProgress(indeterminate=true, pct=0, label='') {
     document.getElementById('progressWrap').classList.add('show');
     const fill = document.getElementById('progressFill');
     fill.className = indeterminate ? 'progress-fill indeterminate' : 'progress-fill';
@@ -198,38 +174,23 @@ function showProgress(indeterminate = true, pct = 0, label = '') {
 }
 function hideProgress() { document.getElementById('progressWrap').classList.remove('show'); }
 
-// ── Hoofd pipeline ────────────────────────────────────────────────────────────
+// ── Hoofd pipeline ────────────────────────────────────────────────
 async function startPipeline() {
     if (running) return;
-
-    // Controleer of proxy URL is ingevuld
-    if (PROXY_BASE.includes('JOUW-WORKER')) {
-        log('⚠ Vul eerst de PROXY_BASE URL in (zie bovenaan het script).', 'err');
-        log('Stap 1: Deploy worker.js op https://workers.cloudflare.com', 'warn');
-        log('Stap 2: Vervang JOUW-WORKER door je eigen worker subdomain.', 'warn');
-        return;
-    }
-
+    if (PROXY_BASE.includes('JOUW-WORKER')) { log('Vul eerst PROXY_BASE in!', 'err'); return; }
     running = true;
     document.getElementById('btnStart').disabled = true;
 
     try {
-        // ── STAP 1 ────────────────────────────────────────────
+        // STAP 1
         setStep(1, 'active');
         log('Verbinden met Trimble Connect Workspace API...', 'info');
-
-        API = await TrimbleConnectWorkspace.connect(
-            window.parent,
-            (event, data) => {
-                log(`Event: ${event}`, '');
-                // Token opvangen wanneer hij binnenkomt of ververst wordt
-                if (event === 'extension.accessToken'
-                    && data && data !== 'pending' && data !== 'denied') {
-                    accessToken = data;
-                    log('Token vernieuwd via event ✓', 'ok');
-                }
+        API = await TrimbleConnectWorkspace.connect(window.parent, (event, data) => {
+            log(`Event: ${event}`, '');
+            if (event === 'extension.accessToken' && data && data !== 'pending' && data !== 'denied') {
+                accessToken = data;
             }
-        );
+        });
         log('Verbonden ✓', 'ok');
 
         log('Access token aanvragen...', 'info');
@@ -238,52 +199,45 @@ async function startPipeline() {
             accessToken = tokenResult;
             log('Token verkregen ✓', 'ok');
         } else {
-            log(`Token status: ${tokenResult} — wacht op event...`, 'warn');
             accessToken = await waitForToken(10000);
         }
 
-        // Project ophalen
         const project = await API.project.getProject();
-        projectId = project.id;
-        projectRegion = (project.location || project.region || 'europe').toLowerCase().split(' ')[0];
+        projectId     = project.id;
+        rootFolderId  = project.rootId || null;
+        projectRegion = (project.location || 'europe').toLowerCase().split(' ')[0];
         log(`Project: ${project.name} (${projectId})`, 'info');
 
-        // Proxy verbinding testen
         log('Proxy verbinding testen...', 'info');
-        await testProxy();
+        const pingR = await fetch(PROXY_BASE.replace('/api', '/ping'));
+        if (!pingR.ok) throw new Error('Proxy niet bereikbaar');
         log('Proxy bereikbaar ✓', 'ok');
 
-        // Model ophalen
         log('Actief model ophalen uit viewer...', 'info');
         currentModel = await getActiveModel();
-
         document.getElementById('infoName').textContent = currentModel.name || 'Onbekend';
         document.getElementById('infoId').textContent   = currentModel.id   || '—';
-        document.getElementById('infoVer').textContent  = currentModel.versionId || currentModel.latestVersionId || '—';
+        document.getElementById('infoVer').textContent  = currentModel.versionId || '—';
         document.getElementById('modelInfo').classList.add('show');
         log(`Model: ${currentModel.name}`, 'ok');
         setStep(1, 'done');
 
-        // ── STAP 2 ────────────────────────────────────────────
+        // STAP 2
         setStep(2, 'active');
         log('Valgevaar analyse starten...', 'info');
         showProgress(true, 0, 'Bronbestand downloaden...');
-
         const generatedIfcBlob = await runFallProtectionScript(currentModel, (pct, msg) => {
             showProgress(false, pct, msg);
             log(msg);
         });
-
         hideProgress();
         log('Script klaar ✓', 'ok');
         setStep(2, 'done');
 
-        // ── STAP 3 ────────────────────────────────────────────
+        // STAP 3
         setStep(3, 'active');
         log('Gegenereerd IFC uploaden...', 'info');
-
         const overlayModel = await uploadAndShowIfc(generatedIfcBlob, currentModel);
-
         document.getElementById('ifcResultText').textContent =
             `"${overlayModel.name}" geladen als overlay (${formatBytes(generatedIfcBlob.size)})`;
         document.getElementById('ifcResult').classList.add('show');
@@ -297,8 +251,7 @@ async function startPipeline() {
         log(`Fout: ${err.message}`, 'err');
         console.error(err);
         [1,2,3].forEach(n => {
-            if (document.getElementById(`step${n}`).classList.contains('active'))
-                setStep(n, 'error');
+            if (document.getElementById(`step${n}`).classList.contains('active')) setStep(n, 'error');
         });
         document.getElementById('btnStart').disabled = false;
     } finally {
@@ -306,40 +259,22 @@ async function startPipeline() {
     }
 }
 
-// ── Token wachten (eerste keer toestemming geven) ─────────────────────────────
 function waitForToken(timeout) {
     return new Promise((resolve, reject) => {
-        const deadline = setTimeout(() =>
-            reject(new Error('Timeout: geen access token. Geef toestemming in de extensie-instellingen.')),
-            timeout
-        );
+        const deadline = setTimeout(() => reject(new Error('Timeout: geen access token.')), timeout);
         const check = setInterval(() => {
             if (accessToken && accessToken !== 'pending' && accessToken !== 'denied') {
-                clearInterval(check);
-                clearTimeout(deadline);
-                resolve(accessToken);
+                clearInterval(check); clearTimeout(deadline); resolve(accessToken);
             }
         }, 200);
     });
 }
 
-// ── Proxy helpers ─────────────────────────────────────────────────────────────
-// Alle Trimble REST calls gaan via de Cloudflare Worker om CORS te omzeilen.
-// De worker voegt geen logica toe — hij proxiet alleen en voegt CORS headers toe.
-
-async function testProxy() {
-    const url = PROXY_BASE.replace('/api', '/ping');
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`Proxy niet bereikbaar (HTTP ${r.status}). Controleer de PROXY_BASE URL.`);
-}
-
+// ── Proxy helpers ─────────────────────────────────────────────────
 async function proxyGet(path) {
     const sep = path.includes('?') ? '&' : '?';
     const r = await fetch(`${PROXY_BASE}${path}${sep}region=${projectRegion}`, {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/json',
-        }
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
     });
     if (!r.ok) {
         const body = await r.text().catch(() => '');
@@ -348,12 +283,16 @@ async function proxyGet(path) {
     return r.json();
 }
 
-async function proxyPost(path, formData) {
+async function proxyJsonPost(path, payload) {
     const sep = path.includes('?') ? '&' : '?';
     const r = await fetch(`${PROXY_BASE}${path}${sep}region=${projectRegion}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        body: formData,
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type':  'application/json',
+            'Accept':        'application/json',
+        },
+        body: JSON.stringify(payload),
     });
     if (!r.ok) {
         const body = await r.text().catch(() => '');
@@ -362,74 +301,90 @@ async function proxyPost(path, formData) {
     return r.json();
 }
 
-// ── Model ophalen ─────────────────────────────────────────────────────────────
-async function getActiveModel() {
-    // 1. Viewer geeft model ID terug
-    const viewer = await API.viewer;
-    let modelId = null;
-    try {
-        const models = await viewer.getModels();
-        if (models && models.length > 0) {
-            modelId = models[0].modelId || models[0].id;
-            log(`Viewer model id: ${modelId}`, 'info');
-        }
-    } catch (e) {
-        log(`viewer.getModels: ${e.message}`, 'warn');
-    }
-
-    if (modelId) {
-        // 2. Bestandsinfo ophalen via proxy
-        try {
-            const info = await proxyGet(`/projects/${projectId}/files/${modelId}`);
-            return info;
-        } catch (e) {
-            log(`Bestandsinfo ophalen mislukt: ${e.message}`, 'warn');
-            // Geef alleen het id terug zodat we toch door kunnen
-            return { id: modelId, name: 'Onbekend model' };
-        }
-    }
-
-    // 3. Fallback: eerste IFC in project
-    log('Geen viewer-model, zoek in projectbestanden...', 'warn');
-    const resp  = await proxyGet(`/projects/${projectId}/files`);
-    const files = resp.list || resp.files || resp;
-    const ifc   = (files || []).find(f =>
-        f.name && (f.name.toLowerCase().endsWith('.ifc') || f.name.toLowerCase().endsWith('.ifczip'))
-    );
-    if (!ifc) throw new Error('Geen IFC bestand gevonden in het project.');
-    log(`Fallback IFC: ${ifc.name}`, 'warn');
-    return ifc;
+// ── Keuzemenu als meerdere modellen geladen zijn ──────────────────
+function askUserToSelectModel(models) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:IBM Plex Sans,sans-serif;';
+        const box = document.createElement('div');
+        box.style.cssText = 'background:#161a22;border:1px solid #00c8ff;border-radius:10px;padding:20px;max-width:340px;width:90%;';
+        box.innerHTML = `<div style="color:#00c8ff;font-weight:600;margin-bottom:12px;font-size:13px">Kies het model om te analyseren</div><div id="modelList" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto"></div>`;
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        const list = box.querySelector('#modelList');
+        models.filter(m => m.name && m.name.toLowerCase().endsWith('.ifc')).forEach(m => {
+            const btn = document.createElement('button');
+            btn.textContent = m.name;
+            btn.style.cssText = 'background:#252b38;color:#e2e8f0;border:1px solid #252b38;border-radius:6px;padding:8px 12px;text-align:left;cursor:pointer;font-size:12px;font-family:inherit;transition:border-color 0.15s;';
+            btn.onmouseover = () => btn.style.borderColor = '#00c8ff';
+            btn.onmouseout  = () => btn.style.borderColor = '#252b38';
+            btn.onclick = () => { document.body.removeChild(overlay); resolve(m); };
+            list.appendChild(btn);
+        });
+    });
 }
 
-// ╔══════════════════════════════════════════════════════════════════════════════╗
-// ║  ⚠  TIJDELIJK TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT  ║
-// ║  Dupliceert het bronbestand ongewijzigd om de upload/overlay te testen.      ║
-// ╚══════════════════════════════════════════════════════════════════════════════╝
+// ── Model ophalen ─────────────────────────────────────────────────
+async function getActiveModel() {
+    const viewer = await API.viewer;
+    let models = [];
+    try {
+        models = await viewer.getModels();
+        log(`Viewer heeft ${models.length} model(len) geladen`, 'info');
+    } catch (e) {
+        throw new Error(`viewer.getModels() mislukt: ${e.message}`);
+    }
+    if (!models || models.length === 0) throw new Error('Geen modellen geladen in de viewer.');
+
+    // Altijd keuzemenu tonen als er meerdere modellen zijn
+    // (viewer.getSelection() geeft object-selecties terug, niet model-selecties)
+    let model = null;
+    const ifcModels = models.filter(m => m.name && m.name.toLowerCase().endsWith('.ifc'));
+
+    if (ifcModels.length === 1) {
+        model = ifcModels[0];
+        log(`Enkel model gevonden: "${model.name}"`, 'ok');
+    } else if (ifcModels.length > 1) {
+        log(`${ifcModels.length} modellen gevonden — keuzemenu tonen`, 'info');
+        model = await askUserToSelectModel(models);
+        log(`Model gekozen: "${model.name}"`, 'ok');
+    } else {
+        model = models[0];
+        log(`Fallback: "${model.name}"`, 'warn');
+    }
+
+    log(`Geselecteerd model: "${model.name}" (id: ${model.id})`, 'ok');
+    return { id: model.id, name: model.name, versionId: model.versionId || null };
+}
+
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║  ⚠  TIJDELIJK TESTSCRIPT — DIENT VERVANGEN TE WORDEN         ║
+// ╚═══════════════════════════════════════════════════════════════╝
 async function runFallProtectionScript(model, onProgress) {
     log('⚠ TESTSCRIPT: dupliceert bestand zonder verwerking', 'warn');
-    onProgress(5, '[TEST] Download-link ophalen via proxy...');
+    onProgress(5, '[TEST] Download-URL ophalen...');
 
-    // Download-link ophalen via de proxy
-    const verId = model.versionId || model.latestVersionId;
-    const dlPath = verId
-        ? `/projects/${projectId}/files/${model.id}/versions/${verId}/downloadlink`
-        : `/projects/${projectId}/files/${model.id}/versions/latest/downloadlink`;
+    // Haal versionId op via fileinfo
+    const fileInfo = await proxyGet(`/files/${model.id}`);
+    const dlVersionId = fileInfo.versionId || model.id;
+    log(`versionId: ${dlVersionId}`, 'info');
 
-    const dlResp = await proxyGet(dlPath);
-    const dlUrl  = dlResp.url || dlResp.downloadUrl || dlResp;
+    // Download via /files/fs/{id}/downloadurl?versionId={versionId}
+    const dlUrlResp = await proxyGet(`/files/fs/${model.id}/downloadurl?versionId=${dlVersionId}`);
+    const downloadUrl = dlUrlResp.uploadURL || dlUrlResp.url || dlUrlResp.downloadUrl
+        || dlUrlResp.fileUrl || (typeof dlUrlResp === 'string' ? dlUrlResp : null);
+    if (!downloadUrl) throw new Error(`Geen download URL: ${JSON.stringify(dlUrlResp)}`);
 
-    if (!dlUrl || typeof dlUrl !== 'string') {
-        throw new Error(`Onverwacht formaat download-link: ${JSON.stringify(dlUrl)}`);
-    }
-    log('Download-link verkregen ✓', 'ok');
-    onProgress(20, '[TEST] Bestand downloaden van S3...');
+    log('Download-URL verkregen ✓', 'ok');
+    onProgress(20, '[TEST] Bestand downloaden van fileservice...');
 
-    // Bestand zelf downloaden — dit is een pre-signed S3 URL, geen auth header nodig
-    const fileResp = await fetch(dlUrl);
-    if (!fileResp.ok) throw new Error(`Download mislukt: HTTP ${fileResp.status}`);
+    const fileResp = await fetch(downloadUrl);
+    if (!fileResp.ok) throw new Error(`Fileservice download mislukt: HTTP ${fileResp.status}`);
     const sourceBytes = await fileResp.arrayBuffer();
+    if (!sourceBytes || sourceBytes.byteLength === 0) throw new Error('Download leeg.');
 
-    log(`Ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
+    log(`Bestand ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
+    onProgress(20, '[TEST] Bestand ontvangen ✓');
     onProgress(50, '[TEST] "Verwerking" simuleren...');
     await delay(500);
     onProgress(80, '[TEST] Duplicaat klaarmaken...');
@@ -439,51 +394,77 @@ async function runFallProtectionScript(model, onProgress) {
 
     return new Blob([sourceBytes], { type: 'application/octet-stream' });
 }
-// ╔══════════════════════════════════════════════════════════════════════════════╗
-// ║  ⚠  EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT      ║
-// ╚══════════════════════════════════════════════════════════════════════════════╝
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║  ⚠  EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN             ║
+// ╚═══════════════════════════════════════════════════════════════╝
 
-// ── Upload & toon als overlay ─────────────────────────────────────────────────
+// ── Upload & toon als overlay ─────────────────────────────────────
 async function uploadAndShowIfc(blob, sourceModel) {
-    const outputName = (sourceModel.name || 'model')
-        .replace(/\.ifc(zip)?$/i, '') + '_valgevaren.ifc';
+    const outputName = (sourceModel.name || 'model').replace(/\.ifc(zip)?$/i, '') + '_valgevaren.ifc';
     log(`Uploaden als: ${outputName}`, 'info');
 
-    const form = new FormData();
-    form.append('name', outputName);
-    if (sourceModel.parentId) form.append('parentId', sourceModel.parentId);
-    form.append('data', blob, outputName);
+    const fileInfo = await proxyGet(`/files/${sourceModel.id}`);
+    const targetParentId = fileInfo.parentId || rootFolderId || '';
 
-    const uploaded = await proxyPost(`/projects/${projectId}/files`, form);
-    log(`Upload geslaagd ✓ (id: ${uploaded.id})`, 'ok');
+    // Stap 1: initiate
+    log('Upload initiate...', 'info');
+    const initResp = await proxyJsonPost(`/files/fs/initiate`, {
+        parentId:   targetParentId,
+        parentType: 'FOLDER',
+        name:       outputName,
+    });
+    log(`Initiate response: ${JSON.stringify(initResp).substring(0, 100)}`, 'info');
 
-    // Model als overlay toevoegen in de viewer
+    const uploadUrl = initResp.uploadURL || initResp.url || initResp.uploadUrl || initResp.putUrl;
+    if (!uploadUrl) throw new Error(`Geen upload URL: ${JSON.stringify(initResp)}`);
+    log('Upload URL verkregen ✓', 'ok');
+
+    // Stap 2: PUT naar S3
+    log('Uploaden naar fileservice...', 'info');
+    const s3Resp = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: blob,
+    });
+    if (!s3Resp.ok) throw new Error(`S3 upload mislukt: HTTP ${s3Resp.status}`);
+    log('Bestand op S3 ✓', 'ok');
+
+    // Stap 3: commit
+    log('Upload committen...', 'info');
+    const commitPayload = { uploadId: initResp.uploadId };
+    log(`Commit payload: ${JSON.stringify(commitPayload)}`, 'info');
+    const uploaded = await proxyJsonPost(`/files/fs/commit`, commitPayload);
+    log(`Upload geslaagd ✓ (id: ${uploaded.id || uploaded.fileId || '?'})`, 'ok');
+
+    // Overlay laden in viewer
     const viewer = await API.viewer;
-    try {
-        await viewer.toggleModel(uploaded.id, true);
-        log('Overlay actief via viewer.toggleModel ✓', 'ok');
-    } catch {
+    const newFileId = uploaded.id || uploaded.fileId;
+    if (newFileId) {
         try {
-            await viewer.addModel({ modelId: uploaded.id });
-            log('Overlay actief via viewer.addModel ✓', 'ok');
-        } catch (e2) {
-            log(`Viewer overlay niet beschikbaar via API: ${e2.message}`, 'warn');
-            log('Bestand staat in het project — open het handmatig als overlay.', 'warn');
+            await viewer.toggleModel(newFileId, true);
+            log('Overlay actief via viewer.toggleModel ✓', 'ok');
+        } catch {
+            try {
+                await viewer.addModel({ modelId: newFileId });
+                log('Overlay actief via viewer.addModel ✓', 'ok');
+            } catch (e2) {
+                log(`Viewer overlay API niet beschikbaar: ${e2.message}`, 'warn');
+                log('Bestand staat in het project — open handmatig als overlay.', 'warn');
+            }
         }
     }
 
-    return uploaded;
+    return { ...uploaded, name: outputName };
 }
 
-// ── Hulpfuncties ──────────────────────────────────────────────────────────────
-function delay(ms)  { return new Promise(r => setTimeout(r, ms)); }
+// ── Hulpfuncties ──────────────────────────────────────────────────
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 function formatBytes(b) {
     if (!b) return '?';
-    if (b < 1024)    return b + ' B';
-    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
-    return (b / 1048576).toFixed(1) + ' MB';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
 }
-
 function resetUI() {
     [1,2,3].forEach(n => setStep(n, 'idle'));
     document.getElementById('modelInfo').classList.remove('show');
@@ -494,10 +475,8 @@ function resetUI() {
     document.getElementById('btnReset').style.display = 'none';
     document.getElementById('btnStart').style.display = 'flex';
     document.getElementById('btnStart').disabled = false;
-    currentModel = null;
-    running      = false;
+    currentModel = null; rootFolderId = null; running = false;
 }
-
 </script>
 </body>
 </html>

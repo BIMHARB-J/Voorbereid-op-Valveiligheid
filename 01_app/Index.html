@@ -92,7 +92,7 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;deze STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
+    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -195,12 +195,25 @@ async function startPipeline() {
 
         log('Access token aanvragen...', 'info');
         const tokenResult = await API.extension.requestPermission('accesstoken');
-        if (tokenResult && tokenResult !== 'pending' && tokenResult !== 'denied') {
+        if (tokenResult === 'denied') {
+            throw new Error('Toegang geweigerd. Ga naar extensie-instellingen in Trimble Connect en geef toestemming voor toegang tot het account.');
+        }
+        if (tokenResult && tokenResult !== 'pending') {
             accessToken = tokenResult;
             log('Token verkregen ✓', 'ok');
         } else {
-            accessToken = await waitForToken(10000);
+            log('Wachten op token goedkeuring...', 'warn');
+            accessToken = await waitForToken(15000);
         }
+        // Valideer het token direct zodat we vroeg falen bij een ongeldig token
+        log('Token valideren...', 'info');
+        const meResp = await fetch(`${PROXY_BASE}/me?region=${projectRegion}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
+        });
+        if (meResp.status === 401) {
+            throw new Error('Access token is ongeldig of verlopen (401). Herlaad de extensie en probeer opnieuw.');
+        }
+        log('Token geldig ✓', 'ok');
 
         const project = await API.project.getProject();
         projectId     = project.id;
