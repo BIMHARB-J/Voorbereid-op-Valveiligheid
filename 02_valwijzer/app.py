@@ -146,19 +146,31 @@ def _run_job(job_id, in_path, out_path, stem, download_url):
             update('running', 'Bestand ophalen van Trimble...')
             import urllib.request
             req = urllib.request.Request(download_url)
-            with urllib.request.urlopen(req, timeout=180) as resp:
+            with urllib.request.urlopen(req, timeout=300) as resp:
                 with open(in_path, 'wb') as f:
                     f.write(resp.read())
 
-        # Stap 2: analyse uitvoeren
-        update('running', 'Analyse uitvoeren...')
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        if script_dir not in sys.path:
-            sys.path.insert(0, script_dir)
+        file_size_mb = os.path.getsize(in_path) / (1024 * 1024)
+        update('running', f'Analyse uitvoeren ({file_size_mb:.1f} MB)...')
 
-        import analyse
-        models = [(stem, in_path)]
-        analyse.build(models, out_path)
+        # Stap 2: analyse als subprocess zodat geheugen volledig vrijkomt na afloop.
+        # Dit voorkomt SIGKILL door memory-overschrijding in de gunicorn worker.
+        import subprocess
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        analyse_script = os.path.join(script_dir, 'analyse.py')
+
+        proc = subprocess.run(
+            [sys.executable, analyse_script, in_path, '-o', out_path],
+            capture_output=True,
+            text=True,
+            timeout=600,  # max 10 minuten
+            cwd=script_dir,
+        )
+
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout or 'Onbekende fout')[-500:]
+            update('error', f'Script fout (exit {proc.returncode}): {err}')
+            return
 
         if not os.path.exists(out_path):
             update('error', 'Script heeft geen uitvoer gegenereerd')
@@ -166,6 +178,8 @@ def _run_job(job_id, in_path, out_path, stem, download_url):
 
         update('done', 'Klaar')
 
+    except subprocess.TimeoutExpired:
+        update('error', 'Analyse timeout (>10 minuten)')
     except Exception as e:
         traceback.print_exc()
         update('error', str(e))
