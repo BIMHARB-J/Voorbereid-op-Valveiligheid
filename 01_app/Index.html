@@ -92,7 +92,6 @@
         </div>
     </div>
 
-    <div class="test-banner" style="margin-top:12px">⚠ &nbsp;DEZE STAP DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step2">
         <div class="step-header">
@@ -107,7 +106,6 @@
         </div>
     </div>
 
-    <div class="test-banner">⚠ &nbsp;EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN DOOR HET ECHTE SCRIPT</div>
 
     <div class="step" id="step3">
         <div class="step-header">
@@ -136,7 +134,10 @@
 // ─────────────────────────────────────────────────────────────────
 // ⚙️  CONFIGURATIE
 // ─────────────────────────────────────────────────────────────────
-const PROXY_BASE = 'https://edgeprotector.jja-hoven.workers.dev/api';
+const PROXY_BASE     = 'https://edgeprotector.jja-hoven.workers.dev/api';
+// URL van de Valwijzer analyse server (Railway/Render)
+// Vervang dit door jouw eigen server URL na deployment
+const ANALYSE_SERVER = 'https://JOUW-SERVER.railway.app';
 
 // ── State ─────────────────────────────────────────────────────────
 let API = null, accessToken = null, projectId = null, projectRegion = 'europe';
@@ -205,15 +206,15 @@ async function startPipeline() {
             log('Wachten op token goedkeuring...', 'warn');
             accessToken = await waitForToken(15000);
         }
-        // Valideer het token direct zodat we vroeg falen bij een ongeldig token
+        // Valideer het token via /regions (werkt altijd, ook zonder project context)
         log('Token valideren...', 'info');
-        const meResp = await fetch(`${PROXY_BASE}/me?region=${projectRegion}`, {
+        const regResp = await fetch(`${PROXY_BASE}/regions?region=${projectRegion}`, {
             headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
         });
-        if (meResp.status === 401) {
-            throw new Error('Access token is ongeldig of verlopen (401). Herlaad de extensie en probeer opnieuw.');
+        if (regResp.status === 401) {
+            throw new Error('Access token ongeldig (401). Herlaad de extensie of log opnieuw in bij Trimble Connect.');
         }
-        log('Token geldig ✓', 'ok');
+        log(`Token geldig ✓ (status: ${regResp.status})`, 'ok');
 
         const project = await API.project.getProject();
         projectId     = project.id;
@@ -291,6 +292,9 @@ async function proxyGet(path) {
     });
     if (!r.ok) {
         const body = await r.text().catch(() => '');
+        if (r.status === 401) {
+            throw new Error(`Authenticatie mislukt (401) bij ${path}. Het access token is ongeldig. Sluit de extensie, herlaad Trimble Connect en open de extensie opnieuw.`);
+        }
         throw new Error(`GET ${path} → HTTP ${r.status}: ${body.slice(0, 200)}`);
     }
     return r.json();
@@ -370,46 +374,62 @@ async function getActiveModel() {
     return { id: model.id, name: model.name, versionId: model.versionId || null };
 }
 
-// ╔═══════════════════════════════════════════════════════════════╗
-// ║  ⚠  TIJDELIJK TESTSCRIPT — DIENT VERVANGEN TE WORDEN         ║
-// ╚═══════════════════════════════════════════════════════════════╝
 async function runFallProtectionScript(model, onProgress) {
-    log('⚠ TESTSCRIPT: dupliceert bestand zonder verwerking', 'warn');
-    onProgress(5, '[TEST] Download-URL ophalen...');
+    onProgress(5, 'IFC ophalen van Trimble...');
 
-    // Haal versionId op via fileinfo
+    // Stap 1: download-URL ophalen
     const fileInfo = await proxyGet(`/files/${model.id}`);
     const dlVersionId = fileInfo.versionId || model.id;
     log(`versionId: ${dlVersionId}`, 'info');
 
-    // Download via /files/fs/{id}/downloadurl?versionId={versionId}
     const dlUrlResp = await proxyGet(`/files/fs/${model.id}/downloadurl?versionId=${dlVersionId}`);
     const downloadUrl = dlUrlResp.uploadURL || dlUrlResp.url || dlUrlResp.downloadUrl
         || dlUrlResp.fileUrl || (typeof dlUrlResp === 'string' ? dlUrlResp : null);
     if (!downloadUrl) throw new Error(`Geen download URL: ${JSON.stringify(dlUrlResp)}`);
 
     log('Download-URL verkregen ✓', 'ok');
-    onProgress(20, '[TEST] Bestand downloaden van fileservice...');
+    onProgress(15, 'Bestand downloaden van Trimble...');
 
+    // Stap 2: bestand downloaden
     const fileResp = await fetch(downloadUrl);
-    if (!fileResp.ok) throw new Error(`Fileservice download mislukt: HTTP ${fileResp.status}`);
+    if (!fileResp.ok) throw new Error(`Download mislukt: HTTP ${fileResp.status}`);
     const sourceBytes = await fileResp.arrayBuffer();
     if (!sourceBytes || sourceBytes.byteLength === 0) throw new Error('Download leeg.');
-
     log(`Bestand ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
-    onProgress(20, '[TEST] Bestand ontvangen ✓');
-    onProgress(50, '[TEST] "Verwerking" simuleren...');
-    await delay(500);
-    onProgress(80, '[TEST] Duplicaat klaarmaken...');
-    await delay(400);
-    onProgress(100, '[TEST] Klaar — ongewijzigd gedupliceerd ✓');
-    log('⚠ Geen analyse uitgevoerd — puur duplicaat', 'warn');
+    onProgress(30, 'Bestand ontvangen ✓ — analyse starten...');
 
-    return new Blob([sourceBytes], { type: 'application/octet-stream' });
+    if (ANALYSE_SERVER.includes('JOUW-SERVER')) {
+        throw new Error('Vul eerst ANALYSE_SERVER in met de URL van de gedeployde server.');
+    }
+
+    // Stap 3: stuur IFC naar de analyse server
+    log(`Analyse server aanroepen: ${ANALYSE_SERVER}`, 'info');
+    onProgress(35, 'Verbinden met analyse server...');
+
+    const form = new FormData();
+    form.append('ifc', new Blob([sourceBytes], { type: 'application/octet-stream' }), model.name);
+    form.append('filename', model.name);
+
+    const analyseResp = await fetch(`${ANALYSE_SERVER}/analyse`, {
+        method: 'POST',
+        body: form,
+    });
+
+    if (!analyseResp.ok) {
+        const errText = await analyseResp.text().catch(() => '');
+        throw new Error(`Analyse server fout (HTTP ${analyseResp.status}): ${errText.substring(0, 200)}`);
+    }
+
+    onProgress(90, 'Analyse klaar — resultaat ontvangen...');
+
+    // Stap 4: gegenereerd IFC ophalen
+    const resultBytes = await analyseResp.arrayBuffer();
+    if (!resultBytes || resultBytes.byteLength === 0) throw new Error('Analyse server gaf leeg resultaat terug.');
+    log(`Resultaat ontvangen: ${formatBytes(resultBytes.byteLength)}`, 'ok');
+    onProgress(100, 'Analyse voltooid ✓');
+
+    return new Blob([resultBytes], { type: 'application/octet-stream' });
 }
-// ╔═══════════════════════════════════════════════════════════════╗
-// ║  ⚠  EINDE TESTSCRIPT — DIENT VERVANGEN TE WORDEN             ║
-// ╚═══════════════════════════════════════════════════════════════╝
 
 // ── Upload & toon als overlay ─────────────────────────────────────
 async function uploadAndShowIfc(blob, sourceModel) {

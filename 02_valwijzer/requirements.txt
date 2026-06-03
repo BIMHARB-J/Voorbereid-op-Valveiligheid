@@ -1,0 +1,11 @@
+# Web framework
+flask==3.0.3
+flask-cors==4.0.1
+gunicorn==22.0.0
+
+# IFC analyse modules
+numpy==1.26.4
+Pillow==10.3.0
+scipy==1.13.1
+shapely==2.0.4
+scikit-image==0.23.2
