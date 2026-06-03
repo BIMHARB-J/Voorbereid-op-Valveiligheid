@@ -81,7 +81,7 @@
     <div class="step" id="step1">
         <div class="step-header">
             <div class="step-num">1</div>
-            <span class="step-title">Huidig model ophalen</span>
+            <span class="step-title">Model ophalen</span>
             <span class="badge idle" id="badge1"><span class="dot"></span>wacht</span>
         </div>
         <div class="step-body" id="body1">Verbinding maken met de 3D viewer en het actieve IFC model ophalen.</div>
@@ -137,7 +137,7 @@
 const PROXY_BASE     = 'https://edgeprotector.jja-hoven.workers.dev/api';
 // URL van de Valwijzer analyse server (Railway/Render)
 // Vervang dit door jouw eigen server URL na deployment
-const ANALYSE_SERVER =  'https://voorbereid-op-valveiligheid-production.up.railway.app';
+const ANALYSE_SERVER = 'https://voorbereid-op-valveiligheid-production.up.railway.app';
 
 // ── State ─────────────────────────────────────────────────────────
 let API = null, accessToken = null, projectId = null, projectRegion = 'europe';
@@ -393,36 +393,66 @@ async function runFallProtectionScript(model, onProgress) {
         throw new Error('Vul eerst ANALYSE_SERVER in met de URL van de gedeployde server.');
     }
 
-    // Stap 2: stuur alleen de download-URL naar de server.
-    // De server downloadt het bestand zelf van Trimble — zo gaat er nooit
-    // een groot bestand door de browser en zijn er geen grootte-limieten.
-    const serverUrl = ANALYSE_SERVER.startsWith('http') ? ANALYSE_SERVER : `https://${ANALYSE_SERVER}`;
-    log(`Analyse server: ${serverUrl}`, 'info');
-    onProgress(20, 'Server haalt bestand op van Trimble...');
+    // Stap 2: start de analyse job op de server (async)
+    // De server downloadt het bestand zelf en voert de analyse uit.
+    // Wij pollen totdat de job klaar is — zo zijn er geen timeouts.
+    const workerBase = PROXY_BASE.replace('/api', '');
+    log(`Analyse job starten...`, 'info');
+    onProgress(20, 'Analyse job starten...');
 
     const form = new FormData();
     form.append('download_url', downloadUrl);
     form.append('filename', model.name);
 
-    // Stuur via de Cloudflare Worker — het iframe staat alleen
-    // requests toe naar domeinen die CORS correct afhandelen.
-    // De worker proxiet door naar de Railway server.
-    const workerAnalyseUrl = PROXY_BASE.replace('/api', '/analyse');
-    const analyseResp = await fetch(workerAnalyseUrl, {
+    const startResp = await fetch(`${workerBase}/analyse`, {
         method: 'POST',
         body: form,
     });
 
-    if (!analyseResp.ok) {
-        const errText = await analyseResp.text().catch(() => '');
-        throw new Error(`Analyse server fout (HTTP ${analyseResp.status}): ${errText.substring(0, 200)}`);
+    if (!startResp.ok) {
+        const errText = await startResp.text().catch(() => '');
+        throw new Error(`Analyse server fout (HTTP ${startResp.status}): ${errText.substring(0, 200)}`);
     }
 
-    onProgress(90, 'Analyse klaar — resultaat ontvangen...');
+    const startJson = await startResp.json();
+    const jobId = startJson.job_id;
+    if (!jobId) throw new Error('Geen job_id ontvangen van server');
+    log(`Job gestart: ${jobId}`, 'ok');
 
-    // Stap 3: gegenereerd IFC ophalen
-    const resultBytes = await analyseResp.arrayBuffer();
-    if (!resultBytes || resultBytes.byteLength === 0) throw new Error('Analyse server gaf leeg resultaat terug.');
+    // Stap 3: poll totdat de job klaar is
+    onProgress(30, 'Analyse bezig...');
+    let attempts = 0;
+    const maxAttempts = 120; // max 10 minuten (5s interval)
+    while (attempts < maxAttempts) {
+        await delay(5000);
+        attempts++;
+
+        const statusResp = await fetch(`${workerBase}/status/${jobId}`);
+        if (!statusResp.ok) continue;
+        const statusJson = await statusResp.json();
+
+        log(`Status: ${statusJson.status} — ${statusJson.message}`, 'info');
+
+        if (statusJson.status === 'done') {
+            onProgress(90, 'Analyse klaar — resultaat ophalen...');
+            break;
+        } else if (statusJson.status === 'error') {
+            throw new Error(`Analyse mislukt: ${statusJson.message}`);
+        }
+
+        // Voortgang bijwerken (30% → 85% tijdens analyse)
+        const pct = 30 + Math.min(55, attempts * 2);
+        onProgress(pct, `Analyse bezig... (${statusJson.message})`);
+    }
+
+    if (attempts >= maxAttempts) throw new Error('Analyse timeout — neem contact op met de beheerder');
+
+    // Stap 4: resultaat downloaden
+    const resultResp = await fetch(`${workerBase}/result/${jobId}`);
+    if (!resultResp.ok) throw new Error(`Resultaat ophalen mislukt: HTTP ${resultResp.status}`);
+
+    const resultBytes = await resultResp.arrayBuffer();
+    if (!resultBytes || resultBytes.byteLength === 0) throw new Error('Resultaat is leeg');
     log(`Resultaat ontvangen: ${formatBytes(resultBytes.byteLength)}`, 'ok');
     onProgress(100, 'Analyse voltooid ✓');
 
