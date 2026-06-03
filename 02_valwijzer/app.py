@@ -42,16 +42,28 @@ app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'service': 'Valwijzer analyse server'})
+    import os, sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    files = os.listdir(script_dir)
+    return jsonify({
+        'status': 'ok',
+        'service': 'Valwijzer analyse server',
+        'script_dir': script_dir,
+        'files_in_dir': files,
+        'sys_path': sys.path[:5],
+    })
 
 
 @app.route('/analyse', methods=['POST'])
 def analyse():
-    if 'ifc' not in request.files:
-        return jsonify({'error': 'Geen IFC bestand meegestuurd (veld: ifc)'}), 400
+    """
+    Twee modi:
+    A) download_url + token meesturen → server downloadt zelf van Trimble
+    B) ifc bestand direct uploaden (voor kleine bestanden)
+    """
+    import urllib.request
 
-    ifc_file = request.files['ifc']
-    original_name = request.form.get('filename', ifc_file.filename or 'model.ifc')
+    original_name = request.form.get('filename', 'model.ifc')
     stem = Path(original_name).stem
     output_name = f'{stem}_valgevaren.ifc'
 
@@ -59,7 +71,23 @@ def analyse():
         input_path  = os.path.join(tmpdir, 'input.ifc')
         output_path = os.path.join(tmpdir, output_name)
 
-        ifc_file.save(input_path)
+        # Modus A: server downloadt zelf via de pre-signed URL
+        download_url = request.form.get('download_url')
+        if download_url:
+            try:
+                req = urllib.request.Request(download_url)
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    with open(input_path, 'wb') as f:
+                        f.write(resp.read())
+            except Exception as e:
+                return jsonify({'error': f'Download van Trimble mislukt: {str(e)}'}), 500
+
+        # Modus B: bestand direct geüpload
+        elif 'ifc' in request.files:
+            request.files['ifc'].save(input_path)
+
+        else:
+            return jsonify({'error': 'Geef download_url of ifc bestand mee'}), 400
 
         try:
             _run_analysis(input_path, output_path, stem)

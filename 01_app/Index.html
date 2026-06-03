@@ -81,7 +81,7 @@
     <div class="step" id="step1">
         <div class="step-header">
             <div class="step-num">1</div>
-            <span class="step-title">Huidig model ophaen</span>
+            <span class="step-title">Huidig model ophalen</span>
             <span class="badge idle" id="badge1"><span class="dot"></span>wacht</span>
         </div>
         <div class="step-body" id="body1">Verbinding maken met de 3D viewer en het actieve IFC model ophalen.</div>
@@ -375,7 +375,7 @@ async function getActiveModel() {
 }
 
 async function runFallProtectionScript(model, onProgress) {
-    onProgress(5, 'IFC ophalen van Trimble...');
+    onProgress(5, 'IFC download-URL ophalen...');
 
     // Stap 1: download-URL ophalen
     const fileInfo = await proxyGet(`/files/${model.id}`);
@@ -386,31 +386,25 @@ async function runFallProtectionScript(model, onProgress) {
     const downloadUrl = dlUrlResp.uploadURL || dlUrlResp.url || dlUrlResp.downloadUrl
         || dlUrlResp.fileUrl || (typeof dlUrlResp === 'string' ? dlUrlResp : null);
     if (!downloadUrl) throw new Error(`Geen download URL: ${JSON.stringify(dlUrlResp)}`);
-
     log('Download-URL verkregen ✓', 'ok');
-    onProgress(15, 'Bestand downloaden van Trimble...');
-
-    // Stap 2: bestand downloaden
-    const fileResp = await fetch(downloadUrl);
-    if (!fileResp.ok) throw new Error(`Download mislukt: HTTP ${fileResp.status}`);
-    const sourceBytes = await fileResp.arrayBuffer();
-    if (!sourceBytes || sourceBytes.byteLength === 0) throw new Error('Download leeg.');
-    log(`Bestand ontvangen: ${formatBytes(sourceBytes.byteLength)}`, 'ok');
-    onProgress(30, 'Bestand ontvangen ✓ — analyse starten...');
+    onProgress(15, 'Analyse server aanroepen...');
 
     if (ANALYSE_SERVER.includes('JOUW-SERVER')) {
         throw new Error('Vul eerst ANALYSE_SERVER in met de URL van de gedeployde server.');
     }
 
-    // Stap 3: stuur IFC naar de analyse server
-    log(`Analyse server aanroepen: ${ANALYSE_SERVER}`, 'info');
-    onProgress(35, 'Verbinden met analyse server...');
+    // Stap 2: stuur alleen de download-URL naar de server.
+    // De server downloadt het bestand zelf van Trimble — zo gaat er nooit
+    // een groot bestand door de browser en zijn er geen grootte-limieten.
+    const serverUrl = ANALYSE_SERVER.startsWith('http') ? ANALYSE_SERVER : `https://${ANALYSE_SERVER}`;
+    log(`Analyse server: ${serverUrl}`, 'info');
+    onProgress(20, 'Server haalt bestand op van Trimble...');
 
     const form = new FormData();
-    form.append('ifc', new Blob([sourceBytes], { type: 'application/octet-stream' }), model.name);
+    form.append('download_url', downloadUrl);
     form.append('filename', model.name);
 
-    const analyseResp = await fetch(`${ANALYSE_SERVER}/analyse`, {
+    const analyseResp = await fetch(`${serverUrl}/analyse`, {
         method: 'POST',
         body: form,
     });
@@ -422,7 +416,7 @@ async function runFallProtectionScript(model, onProgress) {
 
     onProgress(90, 'Analyse klaar — resultaat ontvangen...');
 
-    // Stap 4: gegenereerd IFC ophalen
+    // Stap 3: gegenereerd IFC ophalen
     const resultBytes = await analyseResp.arrayBuffer();
     if (!resultBytes || resultBytes.byteLength === 0) throw new Error('Analyse server gaf leeg resultaat terug.');
     log(`Resultaat ontvangen: ${formatBytes(resultBytes.byteLength)}`, 'ok');
