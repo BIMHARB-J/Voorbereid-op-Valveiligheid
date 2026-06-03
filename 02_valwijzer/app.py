@@ -1,30 +1,21 @@
 """
-Valwijzer Flask Server — async job systeem
-==========================================
-De analyse van grote IFC bestanden kan minuten duren. Om timeouts te
-voorkomen werkt de server asynchroon:
-
-  POST /analyse          → start job, geeft { job_id } terug
-  GET  /status/{job_id}  → { status: queued|running|done|error, message }
-  GET  /result/{job_id}  → download het gegenereerde IFC (als status=done)
-  GET  /health           → server status
+Valwijzer Flask Server
+======================
+Ontvangt een download_url van Trimble, downloadt het IFC zelf,
+voert het analyse script uit als subprocess, en geeft het
+gegenereerde IFC terug als download.
 """
 
 import os
 import sys
-import uuid
 import tempfile
 import traceback
-import threading
+import subprocess
 from pathlib import Path
 from flask import Flask, request, send_file, jsonify, make_response
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
-
-# In-memory job store: { job_id: { status, message, output_path, output_name } }
-jobs = {}
-jobs_lock = threading.Lock()
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 
 # ── CORS ──────────────────────────────────────────────────────────
 CORS_HEADERS = {
@@ -51,16 +42,14 @@ def preflight(path):
 # ── Health ────────────────────────────────────────────────────────
 @app.route('/health', methods=['GET'])
 def health():
-    import os
     script_dir = os.path.dirname(os.path.abspath(__file__))
     return jsonify({
         'status': 'ok',
         'service': 'Valwijzer analyse server',
         'files': os.listdir(script_dir),
-        'active_jobs': len(jobs),
     })
 
-# ── Start analyse job ─────────────────────────────────────────────
+# ── Analyse ───────────────────────────────────────────────────────
 @app.route('/analyse', methods=['POST'])
 def analyse():
     download_url  = request.form.get('download_url')
@@ -69,120 +58,60 @@ def analyse():
     if not download_url and 'ifc' not in request.files:
         return jsonify({'error': 'Geef download_url of ifc bestand mee'}), 400
 
-    job_id   = str(uuid.uuid4())
-    tmp_dir  = tempfile.mkdtemp()   # blijft bestaan na het verzoek
     stem     = Path(original_name).stem
     out_name = f'{stem}_valgevaren.ifc'
-    in_path  = os.path.join(tmp_dir, 'input.ifc')
-    out_path = os.path.join(tmp_dir, out_name)
 
-    # Sla het bestand alvast op als het direct geüpload werd
-    if 'ifc' in request.files:
-        request.files['ifc'].save(in_path)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        in_path  = os.path.join(tmpdir, 'input.ifc')
+        out_path = os.path.join(tmpdir, out_name)
 
-    with jobs_lock:
-        jobs[job_id] = {
-            'status':      'queued',
-            'message':     'In wachtrij',
-            'output_path': out_path,
-            'output_name': out_name,
-        }
-
-    # Start de analyse in een achtergrond-thread
-    t = threading.Thread(
-        target=_run_job,
-        args=(job_id, in_path, out_path, stem, download_url),
-        daemon=True,
-    )
-    t.start()
-
-    return jsonify({'job_id': job_id}), 202
-
-
-# ── Job status opvragen ───────────────────────────────────────────
-@app.route('/status/<job_id>', methods=['GET'])
-def status(job_id):
-    with jobs_lock:
-        job = jobs.get(job_id)
-    if not job:
-        return jsonify({'error': 'Onbekende job'}), 404
-    return jsonify({
-        'status':  job['status'],
-        'message': job['message'],
-    })
-
-
-# ── Resultaat downloaden ──────────────────────────────────────────
-@app.route('/result/<job_id>', methods=['GET'])
-def result(job_id):
-    with jobs_lock:
-        job = jobs.get(job_id)
-    if not job:
-        return jsonify({'error': 'Onbekende job'}), 404
-    if job['status'] != 'done':
-        return jsonify({'error': f'Job nog niet klaar (status: {job["status"]})'}), 409
-    if not os.path.exists(job['output_path']):
-        return jsonify({'error': 'Resultaatbestand niet gevonden'}), 500
-
-    return send_file(
-        job['output_path'],
-        mimetype='application/octet-stream',
-        as_attachment=True,
-        download_name=job['output_name'],
-    )
-
-
-# ── Achtergrond job uitvoeren ─────────────────────────────────────
-def _run_job(job_id, in_path, out_path, stem, download_url):
-    def update(status, message):
-        with jobs_lock:
-            if job_id in jobs:
-                jobs[job_id]['status']  = status
-                jobs[job_id]['message'] = message
-
-    try:
-        # Stap 1: bestand ophalen (als download_url meegegeven)
+        # Bestand ophalen
         if download_url:
-            update('running', 'Bestand ophalen van Trimble...')
             import urllib.request
-            req = urllib.request.Request(download_url)
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                with open(in_path, 'wb') as f:
-                    f.write(resp.read())
+            try:
+                with urllib.request.urlopen(download_url, timeout=300) as resp:
+                    with open(in_path, 'wb') as f:
+                        f.write(resp.read())
+            except Exception as e:
+                return jsonify({'error': f'Download mislukt: {str(e)}'}), 500
+        else:
+            request.files['ifc'].save(in_path)
 
-        file_size_mb = os.path.getsize(in_path) / (1024 * 1024)
-        update('running', f'Analyse uitvoeren ({file_size_mb:.1f} MB)...')
+        size_mb = os.path.getsize(in_path) / (1024 * 1024)
+        print(f'Bestand ontvangen: {size_mb:.1f} MB — analyse starten...')
 
-        # Stap 2: analyse als subprocess zodat geheugen volledig vrijkomt na afloop.
-        # Dit voorkomt SIGKILL door memory-overschrijding in de gunicorn worker.
-        import subprocess
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Analyse als subprocess (geheugen vrijgegeven na afloop)
+        script_dir    = os.path.dirname(os.path.abspath(__file__))
         analyse_script = os.path.join(script_dir, 'analyse.py')
 
-        proc = subprocess.run(
-            [sys.executable, analyse_script, in_path, '-o', out_path],
-            capture_output=True,
-            text=True,
-            timeout=600,  # max 10 minuten
-            cwd=script_dir,
-        )
+        try:
+            proc = subprocess.run(
+                [sys.executable, analyse_script, in_path, '-o', out_path],
+                capture_output=True,
+                text=True,
+                timeout=600,
+                cwd=script_dir,
+            )
+        except subprocess.TimeoutExpired:
+            return jsonify({'error': 'Analyse timeout (>10 minuten)'}), 500
+        except Exception as e:
+            return jsonify({'error': f'Subprocess fout: {str(e)}'}), 500
 
         if proc.returncode != 0:
             err = (proc.stderr or proc.stdout or 'Onbekende fout')[-500:]
-            update('error', f'Script fout (exit {proc.returncode}): {err}')
-            return
+            print(f'Script fout:\n{err}')
+            return jsonify({'error': f'Analyse mislukt: {err}'}), 500
 
         if not os.path.exists(out_path):
-            update('error', 'Script heeft geen uitvoer gegenereerd')
-            return
+            return jsonify({'error': 'Script heeft geen uitvoer gegenereerd'}), 500
 
-        update('done', 'Klaar')
-
-    except subprocess.TimeoutExpired:
-        update('error', 'Analyse timeout (>10 minuten)')
-    except Exception as e:
-        traceback.print_exc()
-        update('error', str(e))
+        print(f'Analyse klaar: {out_name}')
+        return send_file(
+            out_path,
+            mimetype='application/octet-stream',
+            as_attachment=True,
+            download_name=out_name,
+        )
 
 
 if __name__ == '__main__':
