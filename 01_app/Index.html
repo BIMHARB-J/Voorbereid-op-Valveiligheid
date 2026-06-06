@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALWIJZER</title>
+    <title>Valwijzer</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Poppins:wght@300;400;500;600&display=swap');
         :root {
@@ -13,12 +13,12 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; font-size: 14px; }
-        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-        .title-block { flex-shrink: 0; }
-        header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
-        header span { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
-        .company-logo { flex: 1; display: flex; justify-content: flex-end; align-items: center; max-width: 200px; height: 48px; margin-left: auto; }
-        .company-logo img { max-width: 100%; max-height: 48px; object-fit: contain; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+        .title-block { flex-shrink: 0; display: flex; align-items: center; }
+        .valwijzer-logo { height: 32px; width: auto; display: block; object-fit: contain; }
+        header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; line-height: 1; }
+        .company-logo { display: flex; align-items: center; height: 40px; }
+        .company-logo img { height: 40px; width: auto; max-width: 170px; object-fit: contain; display: block; }
         .steps { display: flex; flex-direction: column; gap: 12px; }
         .step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; transition: border-color 0.2s, box-shadow 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .step.active { border-color: var(--accent); }
@@ -75,11 +75,11 @@
 <body>
 <header>
     <div class="title-block">
-        <h1>VALWIJZER</h1>
+        <img src="https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/05_images/02_icon/valwijzer_logo.svg" alt="Valwijzer" class="valwijzer-logo" onerror="this.style.display='none'">
     </div>
     <div class="company-logo" id="companyLogo">
         <img src="https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/05_images/02_icon/bedrijflogo.svg"
-             alt="Bedrijfslogo"
+             alt="Rotsbouw"
              onerror="this.style.display='none'">
     </div>
 </header>
@@ -134,9 +134,9 @@
 <button class="btn-secondary" id="btnReset" onclick="resetUI()" style="display:none">Opnieuw</button>
 
 <footer class="credits">
-    <p class="credit-title">VALWIJZER</p>
+    <p class="credit-title">Valwijzer</p>
     <p class="credit-sub">Afstudeeronderzoek 'Voorbereid op valveiligheid'</p>
-    <p class="credit-sub">Jelmer van Huet Lindeman · Jop Hoven · Joost Jansen · Rots Bouw · 2026</p>
+    <p class="credit-sub">2026</p>
 </footer>
 
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
