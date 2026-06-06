@@ -7,25 +7,35 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
         :root {
-            --bg: #0d0f14; --surface: #161a22; --border: #252b38;
-            --accent: #00c8ff; --accent2: #ff6b35; --text: #e2e8f0;
-            --muted: #64748b; --success: #22c55e; --error: #ef4444; --warning: #f59e0b;
+            --bg: #f5f5f7;          /* Apple lichtgrijs-wit */
+            --surface: #ffffff;     /* zuiver wit voor de blokjes */
+            --border: #e2e2e7;      /* subtiele rand */
+            --accent: #e8d24d;      /* geel (startknop) */
+            --accent2: #d4be35;     /* donkerder geel hover */
+            --text: #1d1d1f;        /* Apple bijna-zwart */
+            --muted: #86868b;       /* Apple grijs */
+            --success: #34c759;     /* Apple groen */
+            --error: #ff3b30;       /* Apple rood */
+            --warning: #ff9500;     /* Apple oranje */
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; font-size: 14px; }
-        header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-        .logo { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; color: #000; flex-shrink: 0; }
-        header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .title-block { flex-shrink: 0; }
+        header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
         header span { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+        .company-logo { flex: 1; display: flex; justify-content: flex-end; align-items: center; max-width: 200px; height: 48px; margin-left: auto; }
+        .company-logo img { max-width: 100%; max-height: 48px; object-fit: contain; }
+        .logo-placeholder { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; padding: 14px 28px; letter-spacing: 2px; }
         .steps { display: flex; flex-direction: column; gap: 12px; }
-        .step { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; transition: border-color 0.2s; }
+        .step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; transition: border-color 0.2s, box-shadow 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .step.active { border-color: var(--accent); }
         .step.done   { border-color: var(--success); }
         .step.error  { border-color: var(--error); }
         .step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; flex-shrink: 0; transition: background 0.2s, color 0.2s; }
-        .step.active .step-num { background: var(--accent); color: #000; }
-        .step.done   .step-num { background: var(--success); color: #000; }
+        .step-num { width: 24px; height: 24px; border-radius: 50%; background: #f0f0f2; color: var(--muted); display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; flex-shrink: 0; transition: background 0.2s, color 0.2s; }
+        .step.active .step-num { background: var(--accent); color: #1d1d1f; }
+        .step.done   .step-num { background: var(--success); color: #fff; }
         .step.error  .step-num { background: var(--error); color: #fff; }
         .step-title { font-weight: 600; font-size: 13px; }
         .step-body { font-size: 12px; color: var(--muted); line-height: 1.6; padding-left: 34px; }
@@ -41,14 +51,14 @@
         .progress-fill.indeterminate { width: 40%; animation: slide 1.2s ease-in-out infinite; }
         @keyframes slide { 0% { transform: translateX(-150%); } 100% { transform: translateX(350%); } }
         .progress-label { font-size: 11px; color: var(--muted); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
-        .btn-primary { width: 100%; padding: 12px; background: var(--accent); color: #000; border: none; border-radius: 6px; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 20px; transition: opacity 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .btn-primary:hover:not(:disabled) { opacity: 0.85; }
+        .btn-primary { width: 100%; padding: 13px; background: var(--accent); color: #1d1d1f; border: none; border-radius: 10px; font-family: 'IBM Plex Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 20px; transition: background 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent2); }
         .btn-primary:active:not(:disabled) { transform: scale(0.98); }
         .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
         .btn-secondary { width: 100%; padding: 10px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; cursor: pointer; margin-top: 8px; transition: border-color 0.2s; }
         .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
         .test-banner { background: rgba(245,158,11,0.08); border: 1px dashed var(--warning); border-radius: 6px; padding: 8px 12px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--warning); line-height: 1.6; text-align: center; }
-        .log { background: #08090c; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-top: 12px; max-height: 160px; overflow-y: auto; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.7; display: none; }
+        .log { background: #fbfbfd; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-top: 12px; max-height: 160px; overflow-y: auto; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.7; display: none; }
         .log.show { display: block; }
         .log-line      { color: var(--muted); }
         .log-line.ok   { color: var(--success); }
@@ -66,14 +76,20 @@
         .ifc-result { background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2); border-radius: 6px; padding: 10px 12px; margin-top: 8px; display: none; font-size: 12px; }
         .ifc-result.show { display: block; }
         .ifc-result strong { color: var(--success); }
+        .credits { margin-top: 28px; text-align: right; }
+        .credit-title { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+        .credit-sub { font-size: 10px; color: var(--muted); line-height: 1.6; }
     </style>
 </head>
 <body>
 <header>
-    <div class="logo">EP</div>
-    <div>
-        <h1>EdgeProtector</h1>
+    <div class="title-block">
+        <h1>Valwijzer</h1>
         <span>IFC Valgevaar Analyse</span>
+    </div>
+    <div class="company-logo" id="companyLogo">
+        <!-- Plaats hier het bedrijfslogo: vervang de tekst door een <img src="..."> -->
+        <img src="https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/05_images/02_icon/rotsbouw-logo.png" alt="Valwijzer logo">
     </div>
 </header>
 
@@ -81,10 +97,10 @@
     <div class="step" id="step1">
         <div class="step-header">
             <div class="step-num">1</div>
-            <span class="step-title">Huidig model ophalen</span>
+            <span class="step-title">Model selecteren</span>
             <span class="badge idle" id="badge1"><span class="dot"></span>wacht</span>
         </div>
-        <div class="step-body" id="body1">Verbinding maken met de 3D viewer en het actieve IFC model ophalen.</div>
+        <div class="step-body" id="body1">Verbinding maken met Trimble connect en het IFC model ophalen.</div>
         <div class="model-info" id="modelInfo">
             <div class="label">Model naam</div><div class="value" id="infoName">—</div>
             <div class="label" style="margin-top:6px">Model ID</div><div class="value" id="infoId">—</div>
@@ -128,6 +144,12 @@
 </button>
 <button class="btn-secondary" id="btnReset" onclick="resetUI()" style="display:none">Opnieuw</button>
 
+<footer class="credits">
+    <p class="credit-title">Valwijzer</p>
+    <p class="credit-sub">Afstudeeronderzoek 'Voorbereid op valveiligheid'</p>
+    <p class="credit-sub"> Jelmer van Huet Lindeman · Jop Hoven · Joost Jansen · Rots Bouw · 2026 </p>
+</footer>
+
 <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
 <script>
 
@@ -135,8 +157,6 @@
 // ⚙️  CONFIGURATIE
 // ─────────────────────────────────────────────────────────────────
 const PROXY_BASE     = 'https://edgeprotector.jja-hoven.workers.dev/api';
-// URL van de Valwijzer analyse server (Railway/Render)
-// Vervang dit door jouw eigen server URL na deployment
 const ANALYSE_SERVER = 'https://voorbereid-op-valveiligheid-production.up.railway.app/';
 
 // ── State ─────────────────────────────────────────────────────────
@@ -353,8 +373,6 @@ async function getActiveModel() {
     }
     if (!models || models.length === 0) throw new Error('Geen modellen geladen in de viewer.');
 
-    // Altijd keuzemenu tonen als er meerdere modellen zijn
-    // (viewer.getSelection() geeft object-selecties terug, niet model-selecties)
     let model = null;
     const ifcModels = models.filter(m => m.name && m.name.toLowerCase().endsWith('.ifc'));
 
