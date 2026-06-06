@@ -1,7 +1,7 @@
 {
-    "icon": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/05_images/02_icon/logo.png",
-    "title": "project testen 3",
+    "icon": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/05_images/02_icon/safety.png",
+    "title": "Valwijzer",
     "url": "https://bimharb-j.github.io/Voorbereid-op-Valveiligheid/01_app/Index.html",
-    "description": "test vloerranden (JJJ)",
+    "description": "Voorbereid op Valveiligheid",
     "enabled": true
 }
