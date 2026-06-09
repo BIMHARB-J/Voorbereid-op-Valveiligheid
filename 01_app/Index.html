@@ -13,12 +13,12 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; font-size: 14px; }
-        header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
-        .title-block { flex-shrink: 0; display: flex; align-items: center; }
-        .valwijzer-logo { height: 32px; width: auto; display: block; object-fit: contain; }
-        header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; line-height: 1; }
-        .company-logo { display: flex; align-items: center; height: 40px; }
-        .company-logo img { height: 40px; width: auto; max-width: 170px; object-fit: contain; display: block; }
+        /* Verticale header: Rotsbouw klein rechtsboven, Valwijzer eronder links */
+        header { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+        .company-logo { display: flex; justify-content: flex-end; align-items: center; }
+        .company-logo img { height: 18px; width: auto; max-width: 95px; object-fit: contain; display: block; }
+        .title-block { display: flex; justify-content: flex-start; align-items: flex-end; }
+        .valwijzer-logo { height: 24px; width: auto; display: block; object-fit: contain; margin-bottom: -5px; }
         .steps { display: flex; flex-direction: column; gap: 12px; }
         .step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; transition: border-color 0.2s, box-shadow 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .step.active { border-color: var(--accent); }
